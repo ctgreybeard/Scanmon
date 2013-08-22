@@ -22,28 +22,43 @@ GetOptions(%options) or die "Invalid options: $!\n";
 
 $PortObj = new Device::SerialPort ($PortName, 0)
    || die "Can't open $PortName: $!\n";
+$PortObj->debug(1);
 
 $PortObj->alias("scanner");
-$PortObj->baudrate(115200);
-$PortObj->parity("none");
-$PortObj->handshake("none");
-$PortObj->databits(8);
-$PortObj->stopbits(1); 
+$PortObj->baudrate(19200) if $PortObj->can_baud;
+$PortObj->handshake("none") if $PortObj->can_handshake;
+$PortObj->databits(8) if $PortObj->can_databits;
+$PortObj->stopbits(1) if $PortObj->can_stopbits; 
 $PortObj->is_stty_eol($EOL);
 
 $PortObj->are_match($EOLC);
 
-$PortObj->write_settings;
+$PortObj->write_settings || die "Can't write settings to $PortName\n";
+
+printf "Serial Port can_rtscts: %s\n", $PortObj->can_rtscts ? "Yes" : "No";
+printf "Serial Port can_handshake: %s\n", $PortObj->can_handshake ? "Yes: " . join(", ", $PortObj->handshake) : "No";
+printf "Serial Port can_status: %s\n", $PortObj->can_status ? "Yes" : "No";
+printf "Serial Port can_write_done: %s\n", $PortObj->can_write_done ? "Yes" : "No";
+#printf "Serial Port can_write_drain: %s\n", $PortObj->can_write_drain ? "Yes" : "No";
 
 # Save the current settings
 
 $PortObj->save($ConfigurationFileName)
    || warn "Can't save $ConfigurationFileName: $!\n";
 
-my $output_string = "$Cmd\r";
+sleep(2); # Wait a bit
+$PortObj->purge_rx;
+$PortObj->purge_tx;
+sleep(2); # Wait a bit more
+
+my $output_string = "$Cmd$EOLC";
+#$PortObj->purge_all;
+#$PortObj->write_drain;
+printf "Writing command \"%s\" to scanner\n", $Cmd;
 my $count_out = $PortObj->write($output_string);
 	warn "write failed\n"         unless ($count_out);
 	warn "write incomplete\n"     if ( $count_out != length($output_string) );
+#$PortObj->write_drain;
 
 # Read the response ...
 #my $gotit = "";
