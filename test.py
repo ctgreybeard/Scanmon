@@ -5,22 +5,26 @@ import io
 
 scanner = serial.Serial()
 scanner.baudrate = 19200
-scanner.timeout = 1
+scanner.timeout = 0.2
 
-sio = io.TextIOWrapper(io.BufferedRWPair(scanner, scanner), newline="\r", line_buffering=True)
-
-scanner.port = '/dev/cu.PL2303-000013FA'
+scanner.port = '/dev/cu.PL2303-003012FD'
 scanner.open()
 
-print("Scanner=", scanner)
-print("SIO=", sio)
+sio = io.TextIOWrapper(scanner, newline=None, line_buffering=False)
+
+
+print("Scanner=", str(scanner))
+print("SIO=", str(sio))
 
 sio.write("MDL\r")
 ans = sio.readline()
 
-print('ANS=', ans)
+print('ANS=', repr(ans))
+
+# Can we change the timeout midstream?
+scanner.timeout = 5
 
 sio.write("VER\r")
 ans = sio.readline()
 
-print('ANS=', ans)
+print('ANS=', repr(ans))
