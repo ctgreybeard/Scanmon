@@ -33,7 +33,7 @@ class Scanner(Serial):
 		if self.port is None:	# Still bad ... not good
 			return False
 		
-		self.baudrate(19200)	# Temporary default
+		self.baudrate = 19200	# Temporary default
 		
 		self.open()
 		
