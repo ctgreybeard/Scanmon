@@ -7,7 +7,7 @@ scanner = serial.Serial()
 scanner.baudrate = 19200
 scanner.timeout = 0.2
 
-scanner.port = '/dev/cu.PL2303-003012FD'
+scanner.port = '/dev/cu.PL2303-000013FA'
 scanner.open()
 
 sio = io.TextIOWrapper(scanner, newline=None, line_buffering=False)

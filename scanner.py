@@ -15,12 +15,22 @@ class Scanner(Serial):
 	"""
 
 	def __init__(self, port = None, baudrate = 0, timeout = 0.2):
+		'''
+		Initialize the underlying serial port and provide the wrapper
+		'''
+		
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
-			newline=None, line_buffering=True)
+			newline='\r', line_buffering=True)
 		return
 		
 	def discover(self):
+		'''
+		Discover the Scanner port
+		
+		Currently only the PL2303 is acceptable. This will expand later in development
+		'''
+		
 		if self.port is None:	# Look for the port
 			devs_prefix = ['cu.PL2303',] # Just PL2303 devices for now
 			pdevs = [glob('/dev/' + pref + '*') for pref in devs_prefix]
@@ -38,3 +48,15 @@ class Scanner(Serial):
 		self.open()
 		
 		return self.isOpen()
+
+	def cmd(self, cmd_string):
+		'''
+		Send a command and return the response
+		
+		The line ending '\r' is automatically added and removed
+		'''
+		
+		self._sio.write(cmd_string + '\r')
+		self._sio.flush()	# Note sure we need this ...
+		return self._sio.readline().rstrip('\r')
+		
