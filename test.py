@@ -12,19 +12,30 @@ scanner.open()
 
 sio = io.TextIOWrapper(scanner, newline=None, line_buffering=False)
 
+def doit(cmd):
+	sio.write(cmd + "\r")
+	sio.flush() # To be sure ...
+	ans = sio.readline()
+	print('ANS=', repr(ans))
+	return(ans)
+
 
 print("Scanner=", str(scanner))
 print("SIO=", str(sio))
 
-sio.write("MDL\r")
-ans = sio.readline()
-
-print('ANS=', repr(ans))
+doit("MDL")
 
 # Can we change the timeout midstream?
-scanner.timeout = 5
+scanner.timeout = 3
 
-sio.write("VER\r")
-ans = sio.readline()
+doit("VER")
 
-print('ANS=', repr(ans))
+# How about the baud rate?
+
+scanner.baudrate = 300
+
+doit('MDL')
+
+scanner.baudrate = 19200
+
+doit('MDL')
