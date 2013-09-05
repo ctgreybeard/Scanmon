@@ -21,7 +21,7 @@ class Scanner(Serial):
 		
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
-			newline='\r', line_buffering=True, encoding='iso-8859-1')
+			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
 		return
 		
 	def discover(self):
@@ -58,7 +58,7 @@ class Scanner(Serial):
 		
 		self._sio.write(cmd_string + '\r')
 		self._sio.flush()	# Note sure we need this ...
-		resp = self._sio.readline()
-		if resp.endswith('\r'): resp = resp[:-1] # Strip the '\r'
+		resp = self._sio.readline().encode('ISO-8859-1')
+		if resp.endswith(b'\r'): resp = resp[:-1] # Strip the '\r'
 		return resp
 		

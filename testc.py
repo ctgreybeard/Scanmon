@@ -5,13 +5,6 @@ import fileinput
 import sys, os
 print('Default encoding is', sys.getdefaultencoding())
 
-# We need to close stdout and re-open it to allow the Latin-1 characters
-# that the scanner returns
-print('Closing stdout')
-sys.stdout.close()
-sys.stdout = os.fdopen(1, 'w', encoding='ISO-8859-1')
-print('New stdout open')
-
 S=Scanner()
 
 print("we have a scanner: ", S)
