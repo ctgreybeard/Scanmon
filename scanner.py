@@ -14,14 +14,14 @@ class Scanner(Serial):
 	Scanner class - Handles opening IO to the scanner and command write with response read.
 	"""
 
-	def __init__(self, port = None, baudrate = 0, timeout = 0.2):
+	def __init__(self, port = None, baudrate = 0, timeout = 0.2, ):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
 		
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
-			newline='\r', line_buffering=True)
+			newline='\r', line_buffering=True, encoding='iso-8859-1')
 		return
 		
 	def discover(self):
@@ -58,5 +58,7 @@ class Scanner(Serial):
 		
 		self._sio.write(cmd_string + '\r')
 		self._sio.flush()	# Note sure we need this ...
-		return self._sio.readline().rstrip('\r')
+		resp = self._sio.readline()
+		if resp.endswith('\r'): resp = resp[:-1] # Strip the '\r'
+		return resp
 		
