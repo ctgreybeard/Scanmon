@@ -6,13 +6,23 @@ Uniden Scanner utilities and programming access
 Module and class to communicate with a Uniden DMA scanner (BCD996XT, BCD396XT, etc.)
 """
 
-import io
+import io, re, types
 from serial import Serial
 from glob import glob
 
 # A useful function
 def _lineno(lineidx): return b'123456789'[lineidx:lineidx+1]
 	
+ERRORRESP = (b'', 		# Null
+			 b'ERR', 	# Invalid command
+			 b'NG',		# Valid command, wrong mode
+			 b'FER',	# Framing error
+			 b'ORER')	# Overrun error
+			 
+
+prematch = rb'(?P<CMD>\w*)'	# Only need the first "word" on the line
+prematchre = re.compile(prematch)
+
 class Decode:
 	'''
 	Decode cmd results
@@ -38,8 +48,8 @@ class Decode:
 	}
 	
 	# Results processing functions
-	def stspost(cmd):
-		pass
+	def stspost(basedict):
+		basedict['stspost'] = 'Done'	# Just for testing ...
 	
 	# Define decoding re's and methods for cmd results
 	Decodes = {
@@ -59,6 +69,73 @@ class Decode:
 		},
 	}
 
+	def domatch(tomatch):
+
+		global prematchre, ERRORRESP
+	
+		def doIt(target, request):
+			#print('doIt matching:', target)
+			#print('           to:', request)
+			regex = re.compile(request, flags = 0)
+			rematch = regex.match(target)
+			return rematch.groupdict(default={'iserror': True, 'errorcode': Decode.ERR_NOKEYWORDS}) \
+				if rematch is not None else {'iserror': True, 'errorcode': Decode.ERR_NOMATCH}
+	
+		def runIt(target, basedict, request):
+			nonlocal doIt
+		
+			if isinstance(request, types.FunctionType):
+				basedict.update(doIt(target, request(basedict)))
+		
+			elif isinstance(request, bytes):
+				basedict.update(doIt(target, request))
+		
+			else:
+				raise ValueError("Invalid decode type")
+	
+		dec = Decode()
+	
+		matchresult = {	# Set some default results
+			'CMD': b'', 
+			'iserror': False, 
+			'errorcode': Decode.NO_ERROR,
+			'request': tomatch,
+		}
+
+		prematch = prematchre.match(tomatch)
+		if prematch is None: 
+			matchresult.update({'iserror': True, 'errorcode': Decode.ERR_PREMATCH})
+		
+		else:	# Prematch OK, try the main event
+			# Update the results
+			matchresult.update(prematch.groupdict())
+	
+			resp = prematch.group(1)	# What did we find?
+			print('Found:', resp)
+	
+			if resp in ERRORRESP:		# Error response, can't go further
+				matchresult.update({'CMD': resp, 'iserror': True, 'errorcode': Decode.ERR_RESPONSE})
+		
+			elif resp in dec.Decodes:
+				matchresult['CMD'] = resp
+				# OK, we know what to do ... I hope
+		
+				# First, run the prematch if it exists
+				if 'repre' in dec.Decodes[resp]:
+					runIt(tomatch, matchresult, dec.Decodes[resp]['repre'])
+			
+				# So far, so good. Now run the main event
+				if 'recmd' in dec.Decodes[resp]:	# Should usually be there
+					runIt(tomatch, matchresult, dec.Decodes[resp]['recmd'])
+				
+				if 'repost' in dec.Decodes[resp]:	# Post processing
+					dec.Decodes[resp]['repost'](matchresult)
+		
+			else:
+				matchresult.update({'iserror': True, 'errorcode': Decode.ERR_UNKNOWN_RESPONSE})
+		
+		return matchresult
+		
 		
 
 class Scanner(Serial):

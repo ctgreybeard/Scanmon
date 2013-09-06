@@ -14,8 +14,6 @@ BAR=b'BAR,What?'
 tests = (STS1, STS2, STS3, STS4, NULL, NG, FU, BAR)
 #tests = (STS1,)
 
-import re, sys, types
-
 from scanner import Decode
 
 # per BCD396XT_Complete_Reference.pdf
@@ -24,79 +22,10 @@ from scanner import Decode
 #  [L4_MODE],...,[L8_CHAR],[L8_MODE],[SQL],[MUT],[BAT],[RSV],[RSV],[WAT],
 #  [SIG_LVL],[BK_COLOR],[BK_DIMMER][\r]
 
-ERRORRESP = (b'', 		# Null
-			 b'ERR', 	# Invalid command
-			 b'NG',		# Valid command, wrong mode
-			 b'FER',	# Framing error
-			 b'ORER')	# Overrun error
-			 
-
-prematch = rb'(?P<CMD>\w*)'	# Only need the first "word" on the line
-prematchre = re.compile(prematch)
-
-def domatch(tomatch):
-
-	global prematchre, ERRORRESP
-	
-	def doIt(target, request):
-		#print('doIt matching:', target)
-		#print('           to:', request)
-		regex = re.compile(request, flags = 0)
-		rematch = regex.match(target)
-		return rematch.groupdict(default={'iserror': True, 'errorcode': Decode.ERR_NOKEYWORDS}) \
-			if rematch is not None else {'iserror': True, 'errorcode': Decode.ERR_NOMATCH}
-	
-	def runIt(target, basedict, request):
-		nonlocal doIt
-		
-		if isinstance(request, types.FunctionType):
-			basedict.update(doIt(target, request(basedict)))
-		
-		elif isinstance(request, bytes):
-			basedict.update(doIt(target, request))
-		
-		else:
-			raise ValueError("Invalid decode type")
-	
-	dec = Decode()
-	
-	matchresult = {'CMD': b'', 'iserror': False, 'errorcode': Decode.NO_ERROR}
-
-	prematch = prematchre.match(tomatch)
-	if prematch is None: 
-		matchresult.update({'iserror': True, 'errorcode': Decode.ERR_PREMATCH})
-		
-	else:	# Prematch OK, try the main event
-		# Update the results
-		matchresult.update(prematch.groupdict())
-	
-		resp = prematch.group(1)	# What did we find?
-		print('Found:', resp)
-	
-		if resp in ERRORRESP:		# Error response, can't go further
-			matchresult.update({'CMD': resp, 'iserror': True, 'errorcode': Decode.ERR_RESPONSE})
-		
-		elif resp in dec.Decodes:
-			matchresult['CMD'] = resp
-			# OK, we know what to do ... I hope
-		
-			# First, run the prematch if it exists
-			if 'repre' in dec.Decodes[resp]:
-				runIt(tomatch, matchresult, dec.Decodes[resp]['repre'])
-			
-			# So far, so good. Now run the main event
-			if 'recmd' in dec.Decodes[resp]:	# Should usually be there
-				runIt(tomatch, matchresult, dec.Decodes[resp]['recmd'])
-		
-		else:
-			matchresult.update({'iserror': True, 'errorcode': Decode.ERR_UNKNOWN_RESPONSE})
-		
-	return matchresult
-		
 for amatch in tests:
 	print('\n', '-'*40)
 
-	resp = domatch(amatch)
+	resp = Decode.domatch(amatch)
 	print(resp)
 	if resp[Decode.ISERRORKEY]:
 		print('Error code={}, msg={}'.
