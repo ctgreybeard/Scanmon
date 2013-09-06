@@ -10,7 +10,7 @@ O/S just to program my scanner.
 
 So, thinks I, why not write your own?
 
-So I tried Perl, my go-to language and couldn't get it to work reliably fo even
+So I tried Perl, my go-to language and couldn't get it to work reliably for even
 the most basic things.  Device::Serialport was not working correctly through the USB-Serial 
 PL2303 apparently. And I wasn't going to go down that rat-hole to figure out who or where the fault
 was.
