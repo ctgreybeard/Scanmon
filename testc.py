@@ -18,4 +18,4 @@ print('The VER command returns:', S.cmd('VER'))
 while True:
 	cmd = input('CMD=').upper()
 	if len(cmd) == 0: break
-	print('The {cmd} command returned: {ans}'.format(cmd = cmd, ans = S.cmd(cmd)))
+	print('The {cmd} command returned: {ans}'.format(cmd = cmd, ans = S.cmd(cmd, Scanner.RAW)))
