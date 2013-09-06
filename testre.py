@@ -4,6 +4,8 @@
 # A typical STS command return value
 STS1=b'STS,011000,                ,,Bethel          ,,AN        SC \x81  ,,                ,,S0:-2*4***-9*   ,,GRP1---------   ,,0,1,0,0,0,0,0,GREEN,3'
 STS2=b'STS,011000,          \xac\xad    ,,Bethel          ,,Bethel PD 1     ,, 453.6000 DCS134,,S0:-2*4***-9*   ,,GRP----------   ,,1,0,0,0,0,0,5,BLUE,3'
+STS3=b'STS,011000,                ,,Quick Search?   ,,Yes="E" / No=".",,                ,,                ,,                ,,0,1,0,0,0,0,0,GREEN,3'
+STS4=b'STS,1111, -- M E N U --  ,________________,Program System  ,****************,Program Location,,Srch/CloCall Opt,,0,1,0,0,0,0,0,GREEN,3'
 
 import re
 import sys
@@ -67,6 +69,5 @@ def domatch(tomatch):
 	print(restsmatch.groups())
 	print(restsmatch.groupdict())
 	
-domatch(STS1)
-domatch(STS2)
-
+for amatch in (STS1, STS2, STS3, STS4):
+	domatch(amatch)
