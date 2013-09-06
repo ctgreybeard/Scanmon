@@ -9,6 +9,38 @@ import io
 from serial import Serial
 from glob import glob
 
+# A useful function
+def _lineno(lineidx): return b'123456789'[lineidx:lineidx+1]
+	
+class Decode:
+	'''
+	Decode cmd results
+	'''
+	
+	# Results processing functions
+	def stspost(cmd):
+		pass
+	
+	# Define decoding re's and methods for cmd results
+	Decodes = {
+		'STS': {	# STS is hard, it's variable in length
+			'repre': rb'STS,(?P<PREVAL>[01]{4,8}),',
+			'recmd': lambda PREVAL: b''.join((b'STS,(?P<DSP_FORM>[01]{4,8}),',
+				b''.join(
+					map(lambda line: b''.join((
+						b'(P<L',
+						_lineno(line),
+						b'_CHAR>[^,]{,16}),(P<L',
+						_lineno(line),
+						b'_MODE>[^,]{,16}),')), 
+					range(len(PREVAL)))),
+				rb'(?P<SQL>\d?),(?P<MUT>\d?),(?P<BAT>\d?),(?P<RSV1>\d?),(?P<RSV2>\d?),(?P<WAT>\w{,4}),(?P<SIG_LVL>\d?),(?P<BK_COLOR>\w*),(?P<BK_DIMMER>\d)$')),
+			'repost': stspost,	# Post processing routine
+		},
+	}
+
+		
+
 class Scanner(Serial):
 	"""
 	Scanner class - Handles opening IO to the scanner and command write with response read.
