@@ -1,3 +1,4 @@
+# -*- coding: ISO-8859-1 -*-
 # Uniden Scanner utilities and programming access
 """
 Uniden Scanner utilities and programming access
@@ -23,17 +24,17 @@ class Decode:
 	
 	# Define decoding re's and methods for cmd results
 	Decodes = {
-		'STS': {	# STS is hard, it's variable in length
+		b'STS': {	# STS is hard, it's variable in length
 			'repre': rb'STS,(?P<PREVAL>[01]{4,8}),',
-			'recmd': lambda PREVAL: b''.join((b'STS,(?P<DSP_FORM>[01]{4,8}),',
+			'recmd': lambda PREDICT: b''.join((b'STS,(?P<DSP_FORM>[01]{4,8}),',
 				b''.join(
 					map(lambda line: b''.join((
-						b'(P<L',
+						b'(?P<L',
 						_lineno(line),
-						b'_CHAR>[^,]{,16}),(P<L',
+						b'_CHAR>[^,]{,16}),(?P<L',
 						_lineno(line),
 						b'_MODE>[^,]{,16}),')), 
-					range(len(PREVAL)))),
+					range(len(PREDICT['PREVAL'])))),
 				rb'(?P<SQL>\d?),(?P<MUT>\d?),(?P<BAT>\d?),(?P<RSV1>\d?),(?P<RSV2>\d?),(?P<WAT>\w{,4}),(?P<SIG_LVL>\d?),(?P<BK_COLOR>\w*),(?P<BK_DIMMER>\d)$')),
 			'repost': stspost,	# Post processing routine
 		},
