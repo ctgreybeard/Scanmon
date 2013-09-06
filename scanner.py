@@ -18,6 +18,25 @@ class Decode:
 	Decode cmd results
 	'''
 	
+	ISERRORKEY = 'iserror'
+	ERRORCODEKEY = 'errorcode'
+	
+	# Some error codes and their descriptions
+	NO_ERROR = 0
+	ERR_PREMATCH = 1
+	ERR_NOKEYWORDS = 2
+	ERR_NOMATCH = 3
+	ERR_RESPONSE = 4
+	ERR_UNKNOWN_RESPONSE = 5
+	
+	ERRORMSG = {
+		ERR_PREMATCH: 'Error in prematch',
+		ERR_NOKEYWORDS: 'No keywords',
+		ERR_NOMATCH: 'No match',
+		ERR_RESPONSE: 'Error response from scanner',
+		ERR_UNKNOWN_RESPONSE: 'Unknown response from scanner'
+	}
+	
 	# Results processing functions
 	def stspost(cmd):
 		pass
