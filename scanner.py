@@ -67,6 +67,9 @@ class Decode:
 				rb'(?P<SQL>\d?),(?P<MUT>\d?),(?P<BAT>\d?),(?P<RSV1>\d?),(?P<RSV2>\d?),(?P<WAT>\w{,4}),(?P<SIG_LVL>\d?),(?P<BK_COLOR>\w*),(?P<BK_DIMMER>\d)$')),
 			'repost': stspost,	# Post processing routine
 		},
+		b'GID': {	# GID
+			'recmd': rb'GID,(?P<SITE_TYPE>[^,]*)(?:,(?P<TGID>[^,]*),(?P<ID_SRCH_MODE>[^,]*),(?P<NAME1>[^,]*),(?P<NAME2>[^,]*),(?P<NAME3>[^,]*))?',
+		},
 	}
 
 	def domatch(tomatch):
@@ -78,7 +81,7 @@ class Decode:
 			#print('           to:', request)
 			regex = re.compile(request, flags = 0)
 			rematch = regex.match(target)
-			return rematch.groupdict(default={'iserror': True, 'errorcode': Decode.ERR_NOKEYWORDS}) \
+			return rematch.groupdict(default=b'') \
 				if rematch is not None else {'iserror': True, 'errorcode': Decode.ERR_NOMATCH}
 	
 		def runIt(target, basedict, request):
