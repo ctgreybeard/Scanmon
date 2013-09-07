@@ -15,9 +15,11 @@ SGID=b'GID,CNV,15,0,System 1,GroupName'
 NGID=b'GID,NG'
 BGID1=b'GID'
 BGID2=b'GID,'
+ABP1=b'ABP,base1,spacing1'
+ABP2=b'ABP,base1,spacing1,base2,spacing2,base3,spacing3'
 
-#tests = (STS1, STS2, STS3, STS4, NULL, NG, FU, BAR, GID)
-tests = (GID, SGID, NGID, BGID1, BGID2)
+tests = (STS1, STS2, STS3, STS4, NULL, NG, FU, BAR, GID, SGID, NGID, BGID1, BGID2, ABP1, ABP2)
+#tests = (GID, SGID, NGID, BGID1, BGID2)
 
 from scanner import Decode
 

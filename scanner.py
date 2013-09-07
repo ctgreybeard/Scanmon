@@ -67,6 +67,9 @@ class Decode:
 				rb'(?P<SQL>\d?),(?P<MUT>\d?),(?P<BAT>\d?),(?P<RSV1>\d?),(?P<RSV2>\d?),(?P<WAT>\w{,4}),(?P<SIG_LVL>\d?),(?P<BK_COLOR>\w*),(?P<BK_DIMMER>\d)$')),
 			'repost': stspost,	# Post processing routine
 		},
+		b'ABP': {       # ABP is hard too, many possible BASE and SPACING pairs
+			'recmd': rb'ABP,(?P<BASE_FREQ_0>[^,]*),(?P<SPACING_FREQ_0>[^,]*)(?:,([^,]*),([^,]*))*',
+		},
 		b'GID': {	# GID
 			'recmd': rb'GID,(?P<SITE_TYPE>[^,]*)(?:,(?P<TGID>[^,]*),(?P<ID_SRCH_MODE>[^,]*),(?P<NAME1>[^,]*),(?P<NAME2>[^,]*),(?P<NAME3>[^,]*))?',
 		},
@@ -76,22 +79,27 @@ class Decode:
 
 		global prematchre, ERRORRESP
 	
-		def doIt(target, request):
+		def doIt(target, request, basedict, addgroups):
 			#print('doIt matching:', target)
 			#print('           to:', request)
 			regex = re.compile(request, flags = 0)
 			rematch = regex.match(target)
-			return rematch.groupdict(default=b'') \
-				if rematch is not None else {'iserror': True, 'errorcode': Decode.ERR_NOMATCH}
+			
+			if rematch is not None:
+				basedict.update(rematch.groupdict(default=b''))
+				if addgroups:
+					basedict.update({'groups': rematch.groups(default=b'')})
+			else:
+				 basedict.update({'iserror': True, 'errorcode': Decode.ERR_NOMATCH})
 	
-		def runIt(target, basedict, request):
+		def runIt(target, request, basedict, addgroups = False):
 			nonlocal doIt
 		
 			if isinstance(request, types.FunctionType):
-				basedict.update(doIt(target, request(basedict)))
+				doIt(target, request(basedict), basedict, addgroups)
 		
 			elif isinstance(request, bytes):
-				basedict.update(doIt(target, request))
+				doIt(target, request, basedict, addgroups)
 		
 			else:
 				raise ValueError("Invalid decode type")
@@ -125,11 +133,11 @@ class Decode:
 		
 				# First, run the prematch if it exists
 				if 'repre' in dec.Decodes[resp]:
-					runIt(tomatch, matchresult, dec.Decodes[resp]['repre'])
+					runIt(tomatch, dec.Decodes[resp]['repre'], matchresult)
 			
 				# So far, so good. Now run the main event
 				if 'recmd' in dec.Decodes[resp]:	# Should usually be there
-					runIt(tomatch, matchresult, dec.Decodes[resp]['recmd'])
+					runIt(tomatch, dec.Decodes[resp]['recmd'], matchresult, addgroups = True)
 				
 				if 'repost' in dec.Decodes[resp]:	# Post processing
 					dec.Decodes[resp]['repost'](matchresult)
