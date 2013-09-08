@@ -579,6 +579,7 @@ class Scanner(Serial):
 	COOKED = 0
 	RAW = 1
 	DECODED = 2
+	COMRATES = (4800, 9600, 19200, 38400, 57600, 115200) # Possible COM port speeds
 
 	def __init__(self, port = None, baudrate = 0, timeout = 0.2, ):
 		'''
