@@ -1,0 +1,87 @@
+ABP Get/Set APCO-P25 Band Plan
+ACC Append Channel / Trunk Frequency
+ACT Append TalkGroup ID
+AGC Append Channel Group
+AGT Append TalkGroup ID Group
+AGV Get/Set Auto Gain Control
+AST Append Site
+BAV Get Battery Voltage
+BBS Get/Set Broadcast Screen Band Settings
+BLT Get/Set Backlight
+BSP Get/Set Band Scope Settings
+BSV Get/Set Battery Info
+CBP Get/Set C-Ch Only Custom search MOT Band Plan
+CIE Clear IF exchange Frequency
+CIN Get/Set Channel Info
+CLA Create Location Alert System
+CLC Get/Set Close Call Settings
+CLR Clear All Memory
+CNT Get/Set LCD Contrast Settings
+COM Get/Set COM port setting
+CSC Go to Custom search and get reception status
+CSG Get/Set Custom Search Group
+CSP Get/Set Custom Search Settings
+CSY Create System
+DBC Get/Set Default Band Coverage Settings
+DCH Delete Channel
+DGR Delete Group / Site
+DLA Delete Location Alert System
+DSY Delete System
+EPG Exit Program Mode
+FWD Get Fwd Index
+GDO Get/Set GPS Format
+GID Get Current TalkGroup ID Status
+GIE Get Global IF exchange Frequency
+GIN Get/Set Group Info
+GLF Get Global Lockout Freq
+GLG Get Reception Status
+GLI Get Lockout TalkGroup ID (for Rvw L/O ID)
+JNT Jump to Number Tag
+JPM Jump Mode
+KBP Get/Set Key Beep and setting
+KEY Push KEY
+LIH Get Location Alert System Index Head
+LIN Get/Set Location Alert System Info
+LIT Get Location Alert System Index Tail
+LOF Lock Out Frequency
+LOI Lockout ID (TalkGroup ID)
+MCP Get/Set Motorola Custom Band Plan
+MDL Get Model Info
+MEM Get Memory Used
+MNU Menu Mode
+OMS Get/Set Opening Message
+P25 Get/Set APCO Data Settings
+POF Power Off
+PRG Enter Program Mode
+PRI Get/Set Priority Mode
+PWR Get RSSI Level
+QGL Get/Set Group Quick Lockout
+QSC Set current frequency and get reception status
+QSH Go to quick search hold mode
+QSL Get/Set System/Site Quick Lockout
+REV Get Rev Index
+RIE Register IF exchange Frequency
+RMB Get Remains of Memory Block
+SCN Get/Set Scanner Option Settings
+SCO Get/Set Search/Close Call Settings
+SCT Get System Count
+SGP Get/Set SAME Group Settings
+SHK Get / Set Search Key Settings
+SIF Get/Set Site Info
+SIH Get System Index Head
+SIN Get/Set System Info
+SIT Get System Index Tail
+SLI Get Search L/O TalkGroup ID
+SQL Get/Set Squelch Level Settings
+SSP Get/Set Service Search Settings
+STS Get Current Status
+TFQ Get/Set Trunk Frequency Info
+TIN Get/Set TalkGroup ID Info
+TON Get/Set Tone-Out Settings
+TRN Get/Set Trunk Info
+ULF Unlock Global L/O
+ULI Unlock TalkGroup ID (for Rvw L/O ID)
+VER Get Firmware Version
+VOL Get/Set Volume Level Settings
+WIN Get Window Voltage
+WXS Get/Set Weather Settings
