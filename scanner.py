@@ -6,7 +6,7 @@ Uniden Scanner utilities and programming access
 Module and class to communicate with a Uniden DMA scanner (BCD996XT, BCD396XT, etc.)
 """
 
-import io, re, types
+import io, re, types, threading
 from serial import Serial
 from glob import glob
 
@@ -424,6 +424,7 @@ class Scanner(Serial):
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
 			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
+		self._sio_lock = threading.Lock()
 		return
 		
 	def discover(self):
@@ -457,11 +458,11 @@ class Scanner(Serial):
 		
 		The line ending '\r' is automatically added and removed
 		'''
-				
-		self._sio.write(cmd_string + '\r')
-		self._sio.flush()	# Note sure we need this ...
+		with self._sio_lock:	# Ensure we don't do two write/reads st the same time
+			self._sio.write(cmd_string + '\r')
+			self._sio.flush()	# Note sure we need this ...
 		
-		rawresp = self._sio.readline().encode('ISO-8859-1')
+			rawresp = self._sio.readline().encode('ISO-8859-1')
 		
 		if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
 		
