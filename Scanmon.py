@@ -118,7 +118,6 @@ tv_sql = StringVar()
 s_sql = Spinbox(mainframe, from_ = 0, to = 19, increment = 1, justify = LEFT,
 	state = 'readonly', width = 4, textvariable = tv_sql, command = set_sql)
 
-
 # Grid the rest into the Frame
 b_lockout.grid(column = 0, row = 1, columnspan = 2, rowspan = 2)
 b_skip.grid(column = 2, row = 1, columnspan = 2, rowspan = 2)
@@ -168,4 +167,3 @@ check_hold()
 
 # Start it all up!
 root.mainloop()
-
