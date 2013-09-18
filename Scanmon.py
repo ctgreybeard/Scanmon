@@ -23,24 +23,57 @@ def check_spin(tv, cmd, var):
 def check_vol():
 	check_spin(tv_vol, 'VOL', 'LEVEL')
 
-def check_sql()
+def check_sql():
 	check_spin(tv_sql, 'SQL', 'LEVEL')
 
-def setfrom_spin(tv, cmd):
-	sval = int(tv.get())
-	resp = scanner.cmd('{},{:02d}'.format(cmd, sval), Scanner.DECODED)
+def send_cmd(cmd):
+	#print('Sending command:', scmd)
+	resp = scanner.cmd(cmd, Scanner.DECODED)
 	assert not resp['iserror'], '{} command failed: {}'.format(cmd, Scanner.ERRORMSG[resp[ERRORCODEKEY]])
 
 def set_vol():
-	setfrom_spin(tv_vol, 'VOL')
+	send_cmd('VOL,{}'.format(tv_vol.get()))
 
-def set_sql()
-	setfrom_spin(tv_sql, 'SQL')
+def set_sql():
+	send_cmd('SQL,{}'.format(tv_sql.get()))
 
 def check_hold():
 	pass
+	
+def do_lockout():
+	print('Commanded to Lockout')
+
+def do_skip():
+	print('Commanded to Skip')
+
+def do_hold():
+	print('Commanded to Hold')
+
+def do_scan():
+	print('Commanded to Scan')
+
+def do_bookmark():
+	print('Commanded to Bookmark')
+
+def do_mute():
+	print('Commanded to Mute')
+
+def do_mode():
+	print('Commanded to Mode')
+
+def do_showlog():
+	print('Commanded to Show Log')
+
+def do_prefs():
+	print('Commanded to Prefs')
+
+def do_start():
+	print('Commanded to Start')
 
 root = Tk()	# Root window
+root.title('Scanmon - Uniden scanner monitor')
+root.resizable(False, False)
+
 mainframe = ttk.Frame(root, padding = (5, 10))
 mainframe.grid(column = 0, row = 0, sticky = (N, E, W, S))
 
@@ -49,20 +82,20 @@ tv_hold_resume = StringVar(value = 'Hold')
 
 # Define the buttons
 
-b_lockout = ttk.Button(mainframe, text = 'Lockout', width = 8)
-b_skip = ttk.Button(mainframe, text = 'Skip', width = 8)
-b_hold_resume = ttk.Button(mainframe, textvariable = tv_hold_resume, width = 8)
-b_scan = ttk.Button(mainframe, text = 'Scan', width = 8)
-b_bookmark = ttk.Button(mainframe, text = 'Bookmark', width = 8)
-b_mute = ttk.Button(mainframe, text = 'Mute', width = 8)
-b_mode_select = ttk.Button(mainframe, text = 'Mode Select')
-b_view_log = ttk.Button(mainframe, text = 'View Log', width = 8)
-b_prefs = ttk.Button(mainframe, text = 'Prefs', width = 8)
-b_close = ttk.Button(mainframe, text = 'Close', width = 8)
-b_start = ttk.Button(mainframe, text = 'Start', width = 8)
+b_lockout = ttk.Button(mainframe, text = 'Lockout', width = 8, command = do_lockout)
+b_skip = ttk.Button(mainframe, text = 'Skip', width = 8, command = do_skip)
+b_hold_resume = ttk.Button(mainframe, textvariable = tv_hold_resume, width = 8, command = do_hold)
+b_scan = ttk.Button(mainframe, text = 'Scan', width = 8, command = do_scan)
+b_bookmark = ttk.Button(mainframe, text = 'Bookmark', width = 8, command = do_bookmark)
+b_mute = ttk.Button(mainframe, text = 'Mute', width = 8, command = do_mute)
+b_mode_select = ttk.Button(mainframe, text = 'Mode Select', command = do_mode)
+b_view_log = ttk.Button(mainframe, text = 'View Log', width = 8, command = do_showlog)
+b_prefs = ttk.Button(mainframe, text = 'Prefs', width = 8, command = do_prefs)
+b_close = ttk.Button(mainframe, text = 'Close', width = 8, command = root.quit)
+b_start = ttk.Button(mainframe, text = 'Start', width = 8, command = do_start)
 
 # Sizegrip
-b_sizegrip = ttk.Sizegrip(mainframe)
+b_sizegrip = ttk.Sizegrip(root)
 
 # Static labels
 l_rcv = ttk.Label(mainframe, text = 'Rcv:')
@@ -112,10 +145,10 @@ l_time.grid(column = 0, row = 0)
 
 # The spinboxes
 tv_vol = StringVar()
-s_vol = Spinbox(mainframe, from_ = 0, to = 29, increment = 1, justify = LEFT,
+s_vol = Spinbox(mainframe, from_ = 0, to = 29, increment = 1, justify = RIGHT,
 	state = 'readonly', width = 4, textvariable = tv_vol, command = set_vol)
 tv_sql = StringVar()
-s_sql = Spinbox(mainframe, from_ = 0, to = 19, increment = 1, justify = LEFT,
+s_sql = Spinbox(mainframe, from_ = 0, to = 19, increment = 1, justify = RIGHT,
 	state = 'readonly', width = 4, textvariable = tv_sql, command = set_sql)
 
 # Grid the rest into the Frame
@@ -149,7 +182,9 @@ b_start.grid(column = 5, row = 8, rowspan = 2)
 lf_status.grid(column = 0, row = 10, columnspan = 7, sticky = EW)
 l_status.grid(column = 0, row = 0, sticky = EW)
 tv_status.set("Ready")
-#b_sizegrip.grid(column = 7, row = 11)
+
+# Window is not resizable but if it were this is how we would show it
+#b_sizegrip.grid(column = 1, row = 1)
 
 root.columnconfigure(0, weight = 1)
 root.rowconfigure(0, weight = 1)
