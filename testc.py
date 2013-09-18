@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #Testing scanner communication
 
 from scanner import Scanner
