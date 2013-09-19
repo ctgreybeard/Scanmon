@@ -3,8 +3,8 @@
 Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
-import re, types, threading
-from scanner import Scanner
+import re, types, threading, time, datetime
+from scanner import Scanner, Decode
 from tkinter import *
 from tkinter import ttk
 
@@ -29,46 +29,148 @@ def check_sql():
 def send_cmd(cmd):
 	#print('Sending command:', scmd)
 	resp = scanner.cmd(cmd, Scanner.DECODED)
-	assert not resp['iserror'], '{} command failed: {}'.format(cmd, Scanner.ERRORMSG[resp[ERRORCODEKEY]])
+	if resp['iserror']:
+		print('{} command failed: {}'.format(cmd, Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]]))
+	return resp
 
 def set_vol():
+	global isMute
 	send_cmd('VOL,{}'.format(tv_vol.get()))
+	if isMute:
+		isMute = False
+		tv_mute.set('Mute')
+		tv_status.set('Unmute')
 
 def set_sql():
 	send_cmd('SQL,{}'.format(tv_sql.get()))
 
 def check_hold():
-	pass
+	global tv_hold_b
+	l1 = send_cmd('STS')['L1_CHAR']
+	is_hold = True if l1.startswith(' ????') else False
+	if is_hold != tv_hold_b:
+		tv_hold_resume.set('Resume' if is_hold else 'Hold')
+		tv_hold_b = is_hold
+		tv_status.set('Hold' if is_hold else 'Resume')
 	
 def do_lockout():
-	print('Commanded to Lockout')
+	send_cmd('KEY,L,P')
+	tv_status.set('Lockout sent')
 
 def do_skip():
-	print('Commanded to Skip')
+	send_cmd('KEY,>,P')
+	tv_status.set('Skip sent')
 
 def do_hold():
-	print('Commanded to Hold')
+	send_cmd('KEY,H,P')
+	tv_status.set('Hold sent')
 
 def do_scan():
-	print('Commanded to Scan')
+	send_cmd('KEY,S,P')
+	tv_status.set('Scan sent')
 
 def do_bookmark():
-	print('Commanded to Bookmark')
+	tv_status.set('Commanded to Bookmark')
+
+isMute = False
+oVol = '0'
 
 def do_mute():
-	print('Commanded to Mute')
+	global isMute, oVol
+	tv_status.set('Commanded to Mute')
+	if isMute:	# Unmute
+		tv_vol.set(oVol)
+		set_vol()
+		tv_status.set('Unmute')
+	else:		# Mute
+		oVol = tv_vol.get()
+		tv_vol.set('0')
+		send_cmd('VOL,0')
+		isMute = True
+		tv_mute.set('Unmute')
+		tv_status.set('Mute')
 
 def do_mode():
-	print('Commanded to Mode')
+	tv_status.set('Commanded to Mode')
 
 def do_showlog():
-	print('Commanded to Show Log')
+	tv_status.set('Commanded to Show Log')
 
 def do_prefs():
-	print('Commanded to Prefs')
+	tv_status.set('Commanded to Prefs')
+
+def do_close():
+	tv_status.set('Closing...')
+	#if monitor_running: do_start()
+	root.quit()
+
+# Signal to run monitor thread
+monitor_running = False
+thr_monitor = False
+
+def run_monitor():
+	
+	loop_count = 0
+	start_time = None
+	now_time = datetime.datetime.today()
+	cur_frq = ''
+	tv_status.set('Monitor starting')
+	
+	while monitor_running:
+		if loop_count >= 5:	# Only check every five loops (about one second)
+			check_vol()
+			check_sql()
+			check_hold()
+			loop_count = 0
+		resp = send_cmd('GLG')
+		#print('Got GLG: FRQ={}, MUT={}, SQL={}'.format(resp['FRQ_TGID'], resp['MUT'], resp['SQL']))
+		if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
+			l_rcv_ind.configure(background = '#e00')
+			#tv_sys.set('')
+			#tv_grp.set('')
+			#tv_chn.set('')
+			#tv_frq.set('')
+			#tv_dur.set('')
+			#tv_time.set('')
+			cur_frq = ''
+			start_time = None
+		elif resp['FRQ_TGID'] != '':
+			now_time = datetime.datetime.today()	# Capture the moment
+			this_frq = eval(resp['FRQ_TGID'])
+			if cur_frq == this_frq:	# Same frequency
+				tv_dur.set(str(int((now_time - start_time).total_seconds())))
+			else:
+				start_time = now_time
+				l_rcv_ind.configure(background = '#0e0')
+				cur_frq = this_frq
+				tv_frq.set(str(cur_frq))
+				tv_sys.set(resp['NAME1'])
+				tv_grp.set(resp['NAME2'])
+				tv_chn.set(resp['NAME3'])
+				tv_dur.set('0')
+				tv_time.set(start_time.strftime('%m/%d/%y %H:%M:%S'))
+		else: tv_status.set('No SQL and no FRQ')
+		loop_count += 1
+		time.sleep(0.2)
+
+	tv_status.set('Monitor ending')
 
 def do_start():
-	print('Commanded to Start')
+	global thr_monitor, monitor_running
+	
+	if monitor_running: 
+		tv_status.set('Commanded to Stop')
+		tv_start.set('Start')
+		monitor_running = False
+		thr_monitor.join(timeout = 3.0)
+		if thr_monitor.is_alive():
+			tv_status.set('Stop Monitor FAILED')
+	else:
+		tv_status.set('Commanded to Start')
+		tv_start.set('Stop')
+		monitor_running = True
+		thr_monitor = threading.Thread(target = run_monitor)
+		thr_monitor.start()
 
 root = Tk()	# Root window
 root.title('Scanmon - Uniden scanner monitor')
@@ -79,6 +181,10 @@ mainframe.grid(column = 0, row = 0, sticky = (N, E, W, S))
 
 # Text variables used below
 tv_hold_resume = StringVar(value = 'Hold')
+tv_hold_b = False
+tv_mute = StringVar(value = 'Mute')
+tv_start = StringVar(value = 'Start')
+tv_status = StringVar()
 
 # Define the buttons
 
@@ -87,12 +193,12 @@ b_skip = ttk.Button(mainframe, text = 'Skip', width = 8, command = do_skip)
 b_hold_resume = ttk.Button(mainframe, textvariable = tv_hold_resume, width = 8, command = do_hold)
 b_scan = ttk.Button(mainframe, text = 'Scan', width = 8, command = do_scan)
 b_bookmark = ttk.Button(mainframe, text = 'Bookmark', width = 8, command = do_bookmark)
-b_mute = ttk.Button(mainframe, text = 'Mute', width = 8, command = do_mute)
+b_mute = ttk.Button(mainframe, textvariable = tv_mute, width = 8, command = do_mute)
 b_mode_select = ttk.Button(mainframe, text = 'Mode Select', command = do_mode)
 b_view_log = ttk.Button(mainframe, text = 'View Log', width = 8, command = do_showlog)
 b_prefs = ttk.Button(mainframe, text = 'Prefs', width = 8, command = do_prefs)
-b_close = ttk.Button(mainframe, text = 'Close', width = 8, command = root.quit)
-b_start = ttk.Button(mainframe, text = 'Start', width = 8, command = do_start)
+b_close = ttk.Button(mainframe, text = 'Close', width = 8, command = do_close)
+b_start = ttk.Button(mainframe, textvariable = tv_start, width = 8, command = do_start)
 
 # Sizegrip
 b_sizegrip = ttk.Sizegrip(root)
@@ -108,31 +214,30 @@ l_sql = ttk.Label(mainframe, text = 'Squelch:')
 
 # Data Display labels
 
-l_rcv_ind = ttk.Label(mainframe, text = '    ', background = '#0E0')
-lf_sys = ttk.LabelFrame(mainframe, text = 'System')
+l_rcv_ind = ttk.Label(mainframe, text = '    ', background = '#00e')
+lf_sys = ttk.LabelFrame(mainframe, text = 'System', padding = (5, 0))
 tv_sys = StringVar()
 l_sys = ttk.Label(lf_sys, textvariable = tv_sys, width = 16)
-lf_grp = ttk.LabelFrame(mainframe, text = 'Group')
+lf_grp = ttk.LabelFrame(mainframe, text = 'Group', padding = (5, 0))
 tv_grp = StringVar()
 l_grp = ttk.Label(lf_grp, textvariable = tv_grp, width = 16)
-lf_chn = ttk.LabelFrame(mainframe, text = 'Channel')
+lf_chn = ttk.LabelFrame(mainframe, text = 'Channel', padding = (5, 0))
 tv_chn = StringVar()
 l_chn = ttk.Label(lf_chn, textvariable = tv_chn, width = 16)
 c_frq = ttk.Frame(mainframe)
-lf_frq = ttk.LabelFrame(c_frq, text = 'Frequency')
+lf_frq = ttk.LabelFrame(c_frq, text = 'Frequency', padding = (5, 0))
 tv_frq = StringVar()
-l_frq = ttk.Label(lf_frq, textvariable = tv_frq, width = 9)
+l_frq = ttk.Label(lf_frq, textvariable = tv_frq, width = 10, anchor = E)
 l_mhz = ttk.Label(c_frq, text = 'MHz')
 c_dur = ttk.Frame(mainframe)
-lf_dur = ttk.LabelFrame(c_dur, text = 'Duration')
+lf_dur = ttk.LabelFrame(c_dur, text = 'Duration', padding = (5, 0))
 tv_dur = StringVar()
-l_dur = ttk.Label(lf_dur, textvariable = tv_dur, width = 5)
+l_dur = ttk.Label(lf_dur, textvariable = tv_dur, width = 10, anchor = E)
 l_secs = ttk.Label(c_dur, text = 'Secs')
-lf_time = ttk.LabelFrame(mainframe, text = 'Time')
+lf_time = ttk.LabelFrame(mainframe, text = 'Start Time', padding = (5, 0))
 tv_time = StringVar()
-l_time = ttk.Label(lf_time, textvariable = tv_time, width = 17)
+l_time = ttk.Label(lf_time, textvariable = tv_time, width = 16, anchor = E)
 lf_status = ttk.LabelFrame(mainframe, text = 'Status')
-tv_status = StringVar()
 l_status = ttk.Label(lf_status, textvariable = tv_status)
 
 # Grid the labels into the frames
@@ -181,7 +286,6 @@ lf_time.grid(column = 5, row = 6, columnspan = 2, sticky = W)
 b_start.grid(column = 5, row = 8, rowspan = 2)
 lf_status.grid(column = 0, row = 10, columnspan = 7, sticky = EW)
 l_status.grid(column = 0, row = 0, sticky = EW)
-tv_status.set("Ready")
 
 # Window is not resizable but if it were this is how we would show it
 #b_sizegrip.grid(column = 1, row = 1)
@@ -199,6 +303,9 @@ assert scanner.discover(), 'Unable to acquire scanner'
 check_vol()
 check_sql()
 check_hold()
+
+rdy_msg = 'Ready! Model=' + send_cmd('MDL')['MODEL'] + ', Version=' + send_cmd('VER')['VERSION']
+tv_status.set(rdy_msg)
 
 # Start it all up!
 root.mainloop()

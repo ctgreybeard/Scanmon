@@ -416,6 +416,8 @@ class Scanner(Serial):
 		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'), 
 		('publicsafety', '1'), ('racing', '9'), ('railroad', '5'), ('special', '12')))
 
+	_sio_lock = threading.Lock()
+
 	def __init__(self, port = None, baudrate = 0, timeout = 0.2, ):
 		'''
 		Initialize the underlying serial port and provide the wrapper
@@ -424,7 +426,6 @@ class Scanner(Serial):
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
 			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
-		self._sio_lock = threading.Lock()
 		return
 		
 	def discover(self):
@@ -458,7 +459,7 @@ class Scanner(Serial):
 		
 		The line ending '\r' is automatically added and removed
 		'''
-		with self._sio_lock:	# Ensure we don't do two write/reads st the same time
+		with Scanner._sio_lock:	# Ensure we don't do two write/reads at the same time
 			self._sio.write(cmd_string + '\r')
 			self._sio.flush()	# Note sure we need this ...
 		
