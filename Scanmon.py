@@ -46,7 +46,7 @@ class Monitor(Thread):
 		# Set some local tracking variables, guaranteed not to match at startup
 		self.tv_vol = ['', 'SETVOL']
 		self.tv_sql = ['', 'SETSQL']
-		self.tv_hold_b = [-1, 'SETHOLD']
+		self.tv_hold_b = [False, 'SETHOLD']
 		self.tv_rcv_ind = ['', 'SETRCVIND']
 		self.tv_sys_disp = [{
 			'system': '',
@@ -128,27 +128,24 @@ class Monitor(Thread):
 			self.send_cmd(message.message)
 	
 	def do_checks(self, main):
-		main.check_vol()
-		main.check_sql()
-		main.check_hold()
+		while main.monitor_running:
+			main.check_vol()
+			main.check_sql()
+			main.check_hold()
+			time.sleep(0.8)		# Give others time to run
 
 	def run(self):	# Overrides the default Thread run (which does nothing)
 	
-		loop_count = 0
 		self.start_time = None
 		self.now_time = datetime.datetime.today()
 		self.cur_frq = ''
 		self.set_status('Monitor starting')
 		self.monitor_running = True
-	
+		# Start the status monitor running
+		self.status_checks = Thread(target = self.do_checks, args = (self, ))
+		self.status_checks.start()
+
 		while self.monitor_running:
-			#print('Loop:', loop_count)
-			if loop_count >= 5:	# Only check every five loops (about one second)
-				#self.check_vol()
-				#self.check_sql()
-				#self.check_hold()
-				Thread(target = self.do_checks, args = (self, )).start()
-				loop_count = 0
 			resp = self.send_cmd('GLG')
 			#print('Got GLG: FRQ={}, MUT={}, SQL={}'.format(resp['FRQ_TGID'], resp['MUT'], resp['SQL']))
 			try:
@@ -183,17 +180,17 @@ class Monitor(Thread):
 			except KeyError:
 				self.set_status('Bad response from GLG')
 			
-			loop_count += 1
+
 			try:
 				while True:
 					self.do_message(self.my_queue.get(block = False))
 			except Empty:
 				pass
-			#time.sleep(0.2)
 
 	def do_stop(self):
 		self.set_status('Monitor ending')
 		self.monitor_running = False
+		self.status_checks.join(timeout = 3)
 
 # END class Monitor
 
@@ -436,8 +433,8 @@ tv_status.set('Ready!')
 thr_monitor = Monitor(to_mon_queue, from_mon_queue, name = 'Monitor')
 thr_monitor.start()
 
-tv_model.set('Model: {}'.format(thr_monitor.scanner.MDL))
-tv_version.set('Version: {}'.format(thr_monitor.scanner.VER))
+tv_model.set('Model {}'.format(thr_monitor.scanner.MDL))
+tv_version.set(thr_monitor.scanner.VER)
 
 while run_app:		# Util we are done ...
 	root.update()
