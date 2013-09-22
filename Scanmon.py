@@ -204,7 +204,7 @@ run_app = True
 
 def run_request(request):
 	rtype = request.req_type
-	print('Req={}: "{}"'.format(rtype, request.message))
+	#print('Req={}: "{}"'.format(rtype, request.message))
 	if rtype == MonitorRequest.REQUESTS['SETVOL']:
 		tv_vol.set(request.message)
 	elif rtype == MonitorRequest.REQUESTS['SETSQL']:
@@ -365,6 +365,10 @@ tv_time = StringVar()
 l_time = ttk.Label(lf_time, textvariable = tv_time, width = 16, anchor = E)
 lf_status = ttk.LabelFrame(mainframe, text = 'Status')
 l_status = ttk.Label(lf_status, textvariable = tv_status)
+tv_model = StringVar()
+l_model = ttk.Label(mainframe, textvariable = tv_model)
+tv_version = StringVar()
+l_version = ttk.Label(mainframe, textvariable = tv_version)
 
 # Grid the labels into the frames
 l_sys.grid(column = 0, row = 0)
@@ -395,8 +399,8 @@ l_sql.grid(column = 2, row = 7, columnspan = 1, sticky = E)
 s_sql.grid(column = 3, row = 7, columnspan = 1, sticky = W)
 b_mode_select.grid(column = 0, row = 8, columnspan = 2)
 b_view_log.grid(column = 2, row = 8, columnspan = 2)
-b_prefs.grid(column = 0, row = 9, columnspan = 2)
-b_close.grid(column = 5, row = 8, rowspan = 2)
+b_prefs.grid(column = 5, row = 8, sticky = W)
+b_close.grid(column = 6, row = 8, sticky = W)
 l_rcv.grid(column = 4, row = 0, columnspan = 1, sticky = E)
 l_rcv_ind.grid(column = 5, row = 0, columnspan = 1, sticky = W)
 lf_sys.grid(column = 5, row = 1, columnspan = 2, sticky = W)
@@ -412,6 +416,8 @@ lf_time.grid(column = 5, row = 6, columnspan = 2, sticky = W)
 #b_start.grid(column = 5, row = 8, rowspan = 2)
 lf_status.grid(column = 0, row = 10, columnspan = 7, sticky = EW)
 l_status.grid(column = 0, row = 0, sticky = EW)
+l_model.grid(column = 0, row = 11, sticky = E, columnspan = 4)
+l_version.grid(column = 5, row = 11, sticky = W, columnspan = 2)
 
 # Window is not resizable but if it were this is how we would show it
 #b_sizegrip.grid(column = 1, row = 1)
@@ -429,6 +435,9 @@ tv_status.set('Ready!')
 
 thr_monitor = Monitor(to_mon_queue, from_mon_queue, name = 'Monitor')
 thr_monitor.start()
+
+tv_model.set('Model: {}'.format(thr_monitor.scanner.MDL))
+tv_version.set('Version: {}'.format(thr_monitor.scanner.VER))
 
 while run_app:		# Util we are done ...
 	root.update()

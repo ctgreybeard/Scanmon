@@ -426,6 +426,8 @@ class Scanner(Serial):
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
 			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
+		self.MDL = '?'
+		self.VER = '?'
 		return
 		
 	def discover(self):
@@ -450,6 +452,10 @@ class Scanner(Serial):
 		self.baudrate = 115200	# Temporary default
 		
 		self.open()
+		
+		if self.isOpen:
+			self.MDL = self.cmd('MDL').split(',')[-1]
+			self.VER = self.cmd('VER').split(',')[-1]
 		
 		return self.isOpen()
 
