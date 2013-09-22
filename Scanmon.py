@@ -126,6 +126,11 @@ class Monitor(Thread):
 			raise ValueError('Non-MonitorRequest received')
 		if message.req_type == MonitorRequest.REQUESTS['CMD']:
 			self.send_cmd(message.message)
+	
+	def do_checks(self, main):
+		main.check_vol()
+		main.check_sql()
+		main.check_hold()
 
 	def run(self):	# Overrides the default Thread run (which does nothing)
 	
@@ -137,11 +142,12 @@ class Monitor(Thread):
 		self.monitor_running = True
 	
 		while self.monitor_running:
-			print('Loop:', loop_count)
+			#print('Loop:', loop_count)
 			if loop_count >= 5:	# Only check every five loops (about one second)
-				self.check_vol()
-				self.check_sql()
-				self.check_hold()
+				#self.check_vol()
+				#self.check_sql()
+				#self.check_hold()
+				Thread(target = self.do_checks, args = (self, )).start()
 				loop_count = 0
 			resp = self.send_cmd('GLG')
 			#print('Got GLG: FRQ={}, MUT={}, SQL={}'.format(resp['FRQ_TGID'], resp['MUT'], resp['SQL']))
@@ -345,10 +351,10 @@ lf_chn = ttk.LabelFrame(mainframe, text = 'Channel', padding = (5, 0))
 tv_chn = StringVar()
 l_chn = ttk.Label(lf_chn, textvariable = tv_chn, width = 16)
 c_frq = ttk.Frame(mainframe)
-lf_frq = ttk.LabelFrame(c_frq, text = 'Frequency', padding = (5, 0))
+lf_frq = ttk.LabelFrame(c_frq, text = 'Freq/TGID', padding = (5, 0))
 tv_frq = StringVar()
 l_frq = ttk.Label(lf_frq, textvariable = tv_frq, width = 10, anchor = E)
-l_mhz = ttk.Label(c_frq, text = 'MHz')
+#l_mhz = ttk.Label(c_frq, text = 'MHz')
 c_dur = ttk.Frame(mainframe)
 lf_dur = ttk.LabelFrame(c_dur, text = 'Duration', padding = (5, 0))
 tv_dur = StringVar()
@@ -398,7 +404,7 @@ lf_grp.grid(column = 5, row = 2, columnspan = 2, sticky = W)
 lf_chn.grid(column = 5, row = 3, columnspan = 2, sticky = W)
 c_frq.grid(column = 5, row = 4, columnspan = 2, sticky = W)
 lf_frq.grid(column = 0, row = 0)
-l_mhz.grid(column = 1, row = 0, sticky = (W, S))
+#l_mhz.grid(column = 1, row = 0, sticky = (W, S))
 c_dur.grid(column = 5, row = 5, sticky = W)
 lf_dur.grid(column = 0, row = 0)
 l_secs.grid(column = 1, row = 0, sticky = (W, S))
