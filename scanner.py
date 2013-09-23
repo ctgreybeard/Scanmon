@@ -6,7 +6,7 @@ Uniden Scanner utilities and programming access
 Module and class to communicate with a Uniden DMA scanner (BCD996XT, BCD396XT, etc.)
 """
 
-import io, re, types, threading
+import io, re, types, threading, time
 from serial import Serial
 from glob import glob
 
@@ -470,6 +470,8 @@ class Scanner(Serial):
 			self._sio.flush()	# Note sure we need this ...
 		
 			rawresp = self._sio.readline().encode('ISO-8859-1')
+			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
+				rawresp = self._sio.readline().encode('ISO-8859-1')
 		
 		if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
 		
@@ -483,6 +485,17 @@ class Scanner(Serial):
 			resp['rawresponse'] = rawresp
 		
 		return resp
+	
+	# Drain is only used when there may be a problem. It is supposed to resynchronize the streams
+	# This takes a while so don't use it lightly
+	def drain():
+		print('Draining...')
+		with Scanner._sio_lock: # Grab the interface
+			self._sio.flush()	# Flush any output
+			time.sleep(0.2)	# wait a bit
+			resp = self._sio.readlines().encode('ISO-8859-1')
+			return resp 
+			
 		
 	def cookIt(self, resp):
 		'''

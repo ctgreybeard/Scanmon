@@ -3,7 +3,8 @@
 Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
-import re, types, time, datetime
+import re, types, time
+from datetime import datetime
 from scanner import Scanner, Decode
 from tkinter import *
 from tkinter import ttk
@@ -117,9 +118,15 @@ class Monitor(Thread):
 		#print('Sending command:', scmd)
 		resp = self.scanner.cmd(cmd, Scanner.DECODED)
 		if resp['iserror']:
-			print('{} command failed: {}'.format(cmd, Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]]))
+			print('{} command failed: {}, {}'.format(cmd, Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]], resp))
 		if request is not None: request.response = resp
 		return resp
+		
+	# Drain is only used when there may be a big problem
+	def drain(self):
+		self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
+		resp = self.scanner.drain()
+		print('Drained: ', resp)
 	
 	def do_message(self, message):
 		if not isinstance(message, MonitorRequest):
@@ -137,7 +144,7 @@ class Monitor(Thread):
 	def run(self):	# Overrides the default Thread run (which does nothing)
 	
 		self.start_time = None
-		self.now_time = datetime.datetime.today()
+		self.now_time = datetime.today()
 		self.cur_frq = ''
 		self.set_status('Monitor starting')
 		self.monitor_running = True
@@ -160,7 +167,7 @@ class Monitor(Thread):
 					self.cur_frq = ''
 					self.start_time = None
 				elif resp['FRQ_TGID'] != '':
-					now_time = datetime.datetime.today()	# Capture the moment
+					now_time = datetime.today()	# Capture the moment
 					this_frq = eval(resp['FRQ_TGID'])
 					if self.cur_frq == this_frq:	# Same frequency
 						self.set_it(self.tv_dur, str(int((now_time - self.start_time).total_seconds())))
@@ -179,6 +186,7 @@ class Monitor(Thread):
 				else: self.set_status('No SQL and no FRQ/TGID??')
 			except KeyError:
 				self.set_status('Bad response from GLG')
+				self.drain()
 			
 
 			try:
