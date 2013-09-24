@@ -6,7 +6,7 @@ Uniden Scanner utilities and programming access
 Module and class to communicate with a Uniden DMA scanner (BCD996XT, BCD396XT, etc.)
 """
 
-import io, re, types, threading, time
+import io, re, types, threading, time, logging
 from serial import Serial
 from glob import glob
 
@@ -366,6 +366,7 @@ class Decode:
 
 		prematch = prematchre.match(tomatch)
 		if prematch is None: 
+			Scanner.logger.error('Prematch failed for: %s', tomatch)
 			matchresult.update({'iserror': True, 'errorcode': Decode.ERR_PREMATCH})
 		
 		else:	# Prematch OK, try the main event
@@ -373,9 +374,10 @@ class Decode:
 			matchresult.update(prematch.groupdict())
 	
 			resp = prematch.group(1)	# What did we find?
-			# print('Found:', resp)
+			Scanner.logger.debug('Prematch found: %s', str(resp))
 	
 			if resp in ERRORRESP:		# Error response, can't go further
+				Scanner.logger.error('Scanner error response: %s', tomatch)
 				matchresult.update({'CMD': resp, 'iserror': True, 'errorcode': Decode.ERR_RESPONSE})
 		
 			elif resp in dec.Decodes:
@@ -397,6 +399,7 @@ class Decode:
 					dec.Decodes[resp]['repost'](matchresult)
 		
 			else:
+				Scanner.logger.error('Scanner unknown response: %s', tomatch)
 				matchresult.update({'iserror': True, 'errorcode': Decode.ERR_UNKNOWN_RESPONSE})
 		
 		return matchresult
@@ -418,7 +421,7 @@ class Scanner(Serial):
 
 	_sio_lock = threading.Lock()
 
-	def __init__(self, port = None, baudrate = 0, timeout = 0.2, ):
+	def __init__(self, port = None, baudrate = 0, timeout = 0.2, logname = __name__):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
@@ -428,7 +431,7 @@ class Scanner(Serial):
 			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
 		self.MDL = '?'
 		self.VER = '?'
-		return
+		Scanner.logger = logging.getLogger(logname + '.scanner')
 		
 	def discover(self):
 		'''
@@ -488,8 +491,8 @@ class Scanner(Serial):
 	
 	# Drain is only used when there may be a problem. It is supposed to resynchronize the streams
 	# This takes a while so don't use it lightly
-	def drain():
-		print('Draining...')
+	def drain(self):
+		Scanner.logger.warning('Draining...')
 		with Scanner._sio_lock: # Grab the interface
 			self._sio.flush()	# Flush any output
 			time.sleep(0.2)	# wait a bit
@@ -503,7 +506,8 @@ class Scanner(Serial):
 		Any non-ASCII chars (ord >127) are replaced with '?'
 		'''
 		# print('Cooked')
-		if not isinstance(resp, bytes): 
+		if not isinstance(resp, bytes):
+			Scanner.logger.critical('CookIt(): I can only cook bytes!')
 			raise TypeError('Scanner.CookIt(): I can only cook bytes!')
 		
 		return bytes([c if c < 127 else ord('?') for c in resp]).decode('ASCII')

@@ -3,13 +3,15 @@
 Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
-import re, types, time
+import re, types, time, sys, logging
 from datetime import datetime
 from scanner import Scanner, Decode
 from tkinter import *
 from tkinter import ttk
 from threading import Thread
 from queue import Queue, Empty
+
+logLevel = logging.INFO
 
 class MonitorRequest:
 	
@@ -41,7 +43,7 @@ class Monitor(Thread):
 		Thread.__init__(self, **kw)
 		self.my_queue = my_queue		# Messages TO the Monitor
 		self.their_queue = their_queue	# Messages FROM the Monitor
-		self.scanner = Scanner()
+		self.scanner = Scanner(logname = __name__)
 		if not self.scanner.isOpen():
 			assert self.scanner.discover(), 'Unable to acquire scanner'
 		# Set some local tracking variables, guaranteed not to match at startup
@@ -59,6 +61,8 @@ class Monitor(Thread):
 		self.cur_frq = ''
 		self.tv_dur = ['', 'SETDUR']
 		self.start_time = None
+		self.logger = logging.getLogger(__name__ + '.monitor')
+		self.logger.setLevel(logging.INFO)
 	
 	def queue_message(self, type, message, request = None):
 		if request is None:		# No current request, make a new one
@@ -71,6 +75,7 @@ class Monitor(Thread):
 		self.their_queue.put(request)
 		
 	def set_status(self, status):
+		self.logger.info('Set Status: %s', status)
 		self.queue_message(MonitorRequest.REQUESTS['SETSTATUS'], status)
 
 	def set_it(self, it, val):
@@ -95,11 +100,14 @@ class Monitor(Thread):
 
 	def check_spin(self, tv, cmd, var):
 		resp = self.send_cmd(cmd)
-		assert not resp['iserror'], '{} command failed'.format(cmd)
-		try:
-			aval = int(resp[var])	# Actual Value
-			self.set_it(tv, aval)
-		except: pass
+		if resp['iserror']:
+			self.logger.error('check_spin: %s command failed', cmd)
+		else:
+			try:
+				aval = int(resp[var])	# Actual Value
+				self.set_it(tv, aval)
+			except: 
+				pass
 
 	def check_vol(self):
 		self.check_spin(self.tv_vol, 'VOL', 'LEVEL')
@@ -115,21 +123,26 @@ class Monitor(Thread):
 		self.set_it(self.tv_hold_b, is_hold)
 
 	def send_cmd(self, cmd, request = None):
-		#print('Sending command:', scmd)
+		self.logger.debug('Sending command: %s', cmd)
 		resp = self.scanner.cmd(cmd, Scanner.DECODED)
 		if resp['iserror']:
-			print('{} command failed: {}, {}'.format(cmd, Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]], resp))
-		if request is not None: request.response = resp
+			self.logger.error('%s command failed: %s, %s', 
+				cmd, 
+				Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]], 
+				str(resp))
+		if request is not None: 
+			request.response = resp
 		return resp
 		
 	# Drain is only used when there may be a big problem
 	def drain(self):
 		self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
 		resp = self.scanner.drain()
-		print('Drained: ', resp)
+		logger.warning('Drained: %s', str(resp))
 	
 	def do_message(self, message):
 		if not isinstance(message, MonitorRequest):
+			self.logger.critical('Non-MonitorRequest received')
 			raise ValueError('Non-MonitorRequest received')
 		if message.req_type == MonitorRequest.REQUESTS['CMD']:
 			self.send_cmd(message.message)
@@ -146,6 +159,7 @@ class Monitor(Thread):
 		self.start_time = None
 		self.now_time = datetime.today()
 		self.cur_frq = ''
+		self.logger.info('Monitor starting')
 		self.set_status('Monitor starting')
 		self.monitor_running = True
 		# Start the status monitor running
@@ -154,8 +168,8 @@ class Monitor(Thread):
 
 		while self.monitor_running:
 			resp = self.send_cmd('GLG')
-			#print('Got GLG: FRQ={}, MUT={}, SQL={}'.format(resp['FRQ_TGID'], resp['MUT'], resp['SQL']))
 			try:
+				self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
 				if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
 					self.set_rcv_ind('#e00')
 					#tv_sys.set('')	# We don't clear the previous system's values
@@ -183,8 +197,10 @@ class Monitor(Thread):
 							'duration': '0',
 							'starttime': now_time.strftime('%m/%d/%y %H:%M:%S')})
 						self.set_it(self.tv_dur, '0')
-				else: self.set_status('No SQL and no FRQ/TGID??')
+				else: 
+					self.set_status('No SQL and no FRQ/TGID??')
 			except KeyError:
+				self.logger.exception('Bad response from GLG: %s', str(resp))
 				self.set_status('Bad response from GLG')
 				self.drain()
 			
@@ -207,15 +223,23 @@ run_app = True
 
 # All routines are defined here
 
+def set_status(status):
+	global a_status
+	
+	logger.info('Status set: %s', status)
+	a_status.append(status)
+	a_status = a_status[1:]
+	tv_status.set('\n'.join(a_status))
+
 def run_request(request):
 	rtype = request.req_type
-	#print('Req={}: "{}"'.format(rtype, request.message))
+	logger.debug('Req=%s: "%s"', rtype, request.message)
 	if rtype == MonitorRequest.REQUESTS['SETVOL']:
 		tv_vol.set(request.message)
 	elif rtype == MonitorRequest.REQUESTS['SETSQL']:
 		tv_sql.set(request.message)
 	elif rtype == MonitorRequest.REQUESTS['SETSTATUS']:
-		tv_status.set(request.message)
+		set_status(request.message)
 	elif rtype == MonitorRequest.REQUESTS['SETHOLD']:
 		tv_hold_resume.set('Resume' if request.message else 'Hold')
 	elif rtype == MonitorRequest.REQUESTS['SETRCVIND']:
@@ -240,64 +264,83 @@ def set_vol():
 	if isMute:
 		isMute = False
 		tv_mute.set('Mute')
-		tv_status.set('Unmute')
+		set_status('Unmute')
 
 def set_sql():
 	send_cmd('SQL,{}'.format(tv_sql.get()))
 
 def do_lockout():
 	send_cmd('KEY,L,P')
-	tv_status.set('Lockout sent')
+	set_status('Lockout sent')
 
 def do_skip():
 	send_cmd('KEY,>,P')
-	tv_status.set('Skip sent')
+	set_status('Skip sent')
 
 def do_hold():
 	send_cmd('KEY,H,P')
-	tv_status.set('Hold sent')
+	set_status('Hold sent')
 
 def do_scan():
 	send_cmd('KEY,S,P')
-	tv_status.set('Scan sent')
+	set_status('Scan sent')
 
 def do_bookmark():
-	tv_status.set('Commanded to Bookmark')
+	set_status('Commanded to Bookmark')
 
 isMute = False
 oVol = '0'
 
 def do_mute():
 	global isMute, oVol
-	tv_status.set('Commanded to Mute')
+	set_status('Commanded to Mute')
 	if isMute:	# Unmute
 		tv_vol.set(oVol)
 		set_vol()
-		tv_status.set('Unmute')
+		set_status('Unmute')
 	else:		# Mute
 		oVol = tv_vol.get()
 		tv_vol.set('0')
 		send_cmd('VOL,0')
 		isMute = True
 		tv_mute.set('Unmute')
-		tv_status.set('Mute')
+		set_status('Mute')
 
 def do_mode():
-	tv_status.set('Commanded to Mode')
+	set_status('Commanded to Mode')
 
 def do_showlog():
-	tv_status.set('Commanded to Show Log')
+	set_status('Commanded to Show Log')
 
 def do_prefs():
-	tv_status.set('Commanded to Prefs')
+	set_status('Commanded to Prefs')
 
 def do_close():
 	global run_app
 	
-	tv_status.set('Closing...')
+	set_status('Closing...')
 	run_app = False
 	thr_monitor.do_stop()
 	thr_monitor.join(timeout = 5)
+
+# Set up logging (based on Logging tutorial (file:///Users/dad/Dropbox/Documents/Python/python-3.3.2-docs-html/howto/logging.html#logging-basic-tutorial)
+
+# create logger
+logger = logging.getLogger('scanmon')
+logger.setLevel(logLevel)
+
+# Create console handler and set level
+ch = logging.StreamHandler(stream = sys.stderr)
+ch.setLevel(logLevel)
+
+# Create formatter
+formatter = logging.Formatter(fmt = '{asctime} - {name} - {levelname} - {message}',
+	style = '{')
+
+# Add formatter to ch
+ch.setFormatter(formatter)
+
+logger.addHandler(ch)
 
 to_mon_queue = Queue()
 from_mon_queue = Queue()
@@ -315,6 +358,7 @@ tv_hold_resume = StringVar(value = 'Hold')
 tv_hold_b = False
 tv_mute = StringVar(value = 'Mute')
 #tv_start = StringVar(value = 'Start')
+a_status = ['', '', '']
 tv_status = StringVar()
 
 # Define the buttons
@@ -434,7 +478,7 @@ mainframe.rowconfigure(7, pad=10)
 mainframe.rowconfigure(8, pad=10)
 mainframe.rowconfigure(9, pad=10)
 
-tv_status.set('Ready!')
+set_status('Ready!')
 
 # Start it all up!
 
@@ -443,6 +487,9 @@ thr_monitor.start()
 
 tv_model.set('Model {}'.format(thr_monitor.scanner.MDL))
 tv_version.set(thr_monitor.scanner.VER)
+logger.info('Scanner Model: %s, Version: %s', 
+	thr_monitor.scanner.MDL, 
+	thr_monitor.scanner.VER)
 
 while run_app:		# Util we are done ...
 	root.update()
