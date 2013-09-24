@@ -12,6 +12,7 @@ from threading import Thread
 from queue import Queue, Empty
 
 logLevel = logging.INFO
+logname = 'scanmon'
 
 class MonitorRequest:
 	
@@ -39,11 +40,11 @@ class MonitorRequest:
 
 class Monitor(Thread):
 
-	def __init__(self, my_queue, their_queue, **kw):
+	def __init__(self, my_queue, their_queue, logname, *args, **kw):
 		Thread.__init__(self, **kw)
 		self.my_queue = my_queue		# Messages TO the Monitor
 		self.their_queue = their_queue	# Messages FROM the Monitor
-		self.scanner = Scanner(logname = __name__)
+		self.scanner = Scanner(logname = logname + '.scanner')
 		if not self.scanner.isOpen():
 			assert self.scanner.discover(), 'Unable to acquire scanner'
 		# Set some local tracking variables, guaranteed not to match at startup
@@ -61,8 +62,9 @@ class Monitor(Thread):
 		self.cur_frq = ''
 		self.tv_dur = ['', 'SETDUR']
 		self.start_time = None
-		self.logger = logging.getLogger(__name__ + '.monitor')
+		self.logger = logging.getLogger(logname + '.monitor')
 		self.logger.setLevel(logging.INFO)
+		self.logger.info('Monitor initialized')
 	
 	def queue_message(self, type, message, request = None):
 		if request is None:		# No current request, make a new one
@@ -326,7 +328,7 @@ def do_close():
 # Set up logging (based on Logging tutorial (file:///Users/dad/Dropbox/Documents/Python/python-3.3.2-docs-html/howto/logging.html#logging-basic-tutorial)
 
 # create logger
-logger = logging.getLogger('scanmon')
+logger = logging.getLogger(logname)
 logger.setLevel(logLevel)
 
 # Create console handler and set level
@@ -482,7 +484,7 @@ set_status('Ready!')
 
 # Start it all up!
 
-thr_monitor = Monitor(to_mon_queue, from_mon_queue, name = 'Monitor')
+thr_monitor = Monitor(to_mon_queue, from_mon_queue, logname, name = 'Monitor', )
 thr_monitor.start()
 
 tv_model.set('Model {}'.format(thr_monitor.scanner.MDL))

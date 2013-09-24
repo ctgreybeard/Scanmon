@@ -16,7 +16,7 @@ def _lineno(lineidx): return '123456789'[lineidx:lineidx+1]
 ERRORRESP = ('', 		# Null
 			 'ERR', 	# Invalid command
 			 'NG',		# Valid command, wrong mode
-			 'FER',	# Framing error
+			 'FER',		# Framing error
 			 'ORER')	# Overrun error
 
 prematch = r'(?P<CMD>\w*)'	# Only need the first "word" on the line
@@ -431,7 +431,19 @@ class Scanner(Serial):
 			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
 		self.MDL = '?'
 		self.VER = '?'
-		Scanner.logger = logging.getLogger(logname + '.scanner')
+		Scanner.logger = logging.getLogger(logname)
+
+		if port is not None:
+			self.logopen()
+	
+	def logopen(self):
+		if self.isOpen():
+			self.MDL = self.cmd('MDL').split(',')[-1]
+			self.VER = self.cmd('VER').split(',')[-1]
+			Scanner.logger.info('Scanner model: %s, version: %s', self.MDL, self.VER)
+		else:
+			Scanner.logger.warning('Scanner (port: %s, baudrate: %d) should be open but is not',
+				self.port, self.baudrate)
 		
 	def discover(self):
 		'''
@@ -441,8 +453,8 @@ class Scanner(Serial):
 		'''
 		
 		if self.port is None:	# Look for the port
-			devs_prefix = ['cu.PL2303',] # Just PL2303 devices for now
-			pdevs = [glob('/dev/' + pref + '*') for pref in devs_prefix]
+			devs_prefix = ['/dev/cu.PL2303*',] # Just PL2303 devices for now
+			pdevs = [glob(pref) for pref in devs_prefix]
 			# Use the first match
 			for pdev1 in pdevs:
 				if len(pdev1) > 0:
@@ -450,15 +462,16 @@ class Scanner(Serial):
 					break
 				
 		if self.port is None:	# Still bad ... not good
+			Scanner.logger.error('Unable to discover scanner using: %s', str(devs_prefix))
 			return False
+		else:
+			Scanner.logger.info('Found device on: %s', self.port)
 		
 		self.baudrate = 115200	# Temporary default
 		
 		self.open()
 		
-		if self.isOpen:
-			self.MDL = self.cmd('MDL').split(',')[-1]
-			self.VER = self.cmd('VER').split(',')[-1]
+		self.logopen()
 		
 		return self.isOpen()
 
