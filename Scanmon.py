@@ -494,6 +494,9 @@ logger.info('Scanner Model: %s, Version: %s',
 	thr_monitor.scanner.VER)
 
 while run_app:		# Util we are done ...
+	if not thr_monitor.isAlive():
+		run_app = False
+		logger.critical('Monitor thread died! Quitting...')
 	root.update()
 	try:
 		request = from_mon_queue.get(timeout = 0.1)
