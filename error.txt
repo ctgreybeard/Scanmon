@@ -1,0 +1,46 @@
+2013-09-25 22:38:08,726 - scanmon.scanner - ERROR - Scanner error response:
+2013-09-25 22:38:08,882 - scanmon.monitor - ERROR - GLG command failed: Error response from scanner, {'CMD': '', 'rawresponse': b'', 'iserror': True, 'isOK': False, 'response': '', 'errorcode': 4}
+2013-09-25 22:38:08,906 - scanmon.monitor - ERROR - Bad response from GLG: {'CMD': '', 'rawresponse': b'', 'iserror': True, 'isOK': False, 'response': '', 'errorcode': 4}
+Traceback (most recent call last):
+  File "scanmon.py", line 180, in run
+    self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
+KeyError: 'FRQ_TGID'
+2013-09-25 22:38:09,182 - scanmon.monitor - INFO - Set Status: Bad response from GLG
+2013-09-25 22:38:09,192 - scanmon.monitor - INFO - Set Status: Draining at 09/25/13 22:38:09
+2013-09-25 22:38:09,192 - scanmon.scanner - WARNING - Draining...
+2013-09-25 22:38:09,192 - scanmon - INFO - Status set: Bad response from GLG
+2013-09-25 22:38:09,246 - scanmon - INFO - Status set: Draining at 09/25/13 22:38:09
+Exception in thread Thread-1:
+Traceback (most recent call last):
+  File "/sw/lib/python3.3/threading.py", line 637, in _bootstrap_inner
+    self.run()
+  File "/sw/lib/python3.3/threading.py", line 594, in run
+    self._target(*self._args, **self._kwargs)
+  File "scanmon.py", line 161, in do_checks
+    main.check_hold()
+  File "scanmon.py", line 126, in check_hold
+    l1 = self.send_cmd('STS')['L1_CHAR']
+KeyError: 'L1_CHAR'
+
+Exception in thread Monitor:
+Traceback (most recent call last):
+  File "scanmon.py", line 180, in run
+    self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
+KeyError: 'FRQ_TGID'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/sw/lib/python3.3/threading.py", line 637, in _bootstrap_inner
+    self.run()
+  File "scanmon.py", line 213, in run
+    self.drain()
+  File "scanmon.py", line 147, in drain
+    resp = self.scanner.drain()
+  File "/Volumes/WaggExt4/Projects/scanner/scanner.py", line 512, in drain
+    resp = self._sio.readlines().encode('ISO-8859-1')
+AttributeError: 'list' object has no attribute 'encode'
+
+2013-09-25 22:38:10,105 - scanmon - CRITICAL - Monitor thread died! Quitting...
+
+[1]  + done       python scanmon.py
