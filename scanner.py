@@ -419,7 +419,7 @@ class Scanner(Serial):
 		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'), 
 		('publicsafety', '1'), ('racing', '9'), ('railroad', '5'), ('special', '12')))
 
-	_sio_lock = threading.Lock()
+	_sio_lock = threading.RLock()
 
 	def __init__(self, port = None, baudrate = 0, timeout = 0.2, logname = __name__):
 		'''
@@ -489,27 +489,30 @@ class Scanner(Serial):
 			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
 				rawresp = self._sio.readline().encode('ISO-8859-1')
 		
-		if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
+			if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
 		
-		# If it's not RAW, we cook it
-		if cooked != Scanner.RAW: resp = self.cookIt(rawresp)
-		else: resp = rawresp
+			# If it's not RAW, we cook it
+			if cooked != Scanner.RAW: resp = self.cookIt(rawresp)
+			else: resp = rawresp
 		
-		# Would you like Decoded with that?
-		if cooked == Scanner.DECODED: 
-			resp = self.decodeIt(resp)
-			resp['rawresponse'] = rawresp
+			# Would you like Decoded with that?
+			if cooked == Scanner.DECODED: 
+				resp = self.decodeIt(resp)
+				resp['rawresponse'] = rawresp
 		
 		return resp
 	
 	# Drain is only used when there may be a problem. It is supposed to resynchronize the streams
 	# This takes a while so don't use it lightly
 	def drain(self):
-		Scanner.logger.warning('Draining...')
 		with Scanner._sio_lock: # Grab the interface
+			Scanner.logger.warning('Draining...')
 			self._sio.flush()	# Flush any output
-			time.sleep(0.2)	# wait a bit
+			Scanner.logger.warning('Drain wait')
+			time.sleep(0.5)	# wait a bit
+			Scanner.logger.warning('Drain read')
 			resp = self._sio.readlines().encode('ISO-8859-1')
+			Scanner.logger.warning('Drain received: ' + str(resp))
 			return resp 
 			
 		
