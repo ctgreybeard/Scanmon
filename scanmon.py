@@ -44,13 +44,11 @@ class Scanmon(ttk.Frame):
 
 	class Monitor(Thread):
 
-		def __init__(self, my_queue, their_queue, barrier, *args, **kw):
+		def __init__(self, scanner, my_queue, their_queue, barrier, *args, **kw):
 			Thread.__init__(self, **kw)
 			self.my_queue = my_queue		# Messages TO the Monitor
 			self.their_queue = their_queue	# Messages FROM the Monitor
-			self.scanner = Scanner(logname = Scanmon.logName + '.scanner')
-			if not self.scanner.isOpen():
-				assert self.scanner.discover(), 'Unable to acquire scanner'
+			self.scanner = scanner
 			# Set some local tracking variables, guaranteed not to match at startup
 			self.tv_vol = ['', 'SETVOL']
 			self.tv_sql = ['', 'SETSQL']
@@ -228,6 +226,11 @@ class Scanmon(ttk.Frame):
 	
 	def __init__(self, master = None):
 		ttk.Frame.__init__(self, master)
+		
+		self.scanner = Scanner(logname = Scanmon.logName + '.scanner')
+		if not self.scanner.isOpen():
+			assert self.scanner.discover(), 'Unable to acquire scanner'
+
 		self.run_app = True
 
 		self.isMute = False
@@ -496,7 +499,9 @@ class Scanmon(ttk.Frame):
 	
 		barrier = Barrier(2, timeout = 10)
 
-		self.thr_monitor = Scanmon.Monitor(self.to_mon_queue, 
+		self.thr_monitor = Scanmon.Monitor(
+			self.scanner, 
+			self.to_mon_queue, 
 			self.from_mon_queue, 
 			barrier, 
 			name = 'Monitor', )
