@@ -4,13 +4,13 @@ Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
 import re, types, time, sys, logging
+from logging.handlers import SysLogHandler
 from datetime import datetime
 from scanner import Scanner, Decode
 from tkinter import *
 from tkinter import ttk
 from threading import Thread, Barrier
 from queue import Queue, Empty
-
 
 class Scanmon(ttk.Frame):
 
@@ -121,11 +121,16 @@ class Scanmon(ttk.Frame):
 			self.check_spin(self.tv_sql, 'SQL', 'LEVEL')
 
 		def check_hold(self):
-			l1 = self.send_cmd('STS')['L1_CHAR']
-			is_hold = True if l1.startswith(' ????') else False
-			if is_hold != self.tv_hold_b[0]:
-				self.set_status('Hold' if is_hold else 'Resume')
-			self.set_it(self.tv_hold_b, is_hold)
+			resp = '?'
+			try:
+				resp = self.send_cmd('STS')
+				l1 = resp['L1_CHAR']
+				is_hold = True if l1.startswith(' ????') else False
+				if is_hold != self.tv_hold_b[0]:
+					self.set_status('Hold' if is_hold else 'Resume')
+				self.set_it(self.tv_hold_b, is_hold)
+			except KeyError:
+				self.logger.warning('STS returned: "%s"', str(resp))
 
 		def send_cmd(self, cmd, request = None):
 			self.logger.debug('Sending command: %s', cmd)
@@ -143,7 +148,7 @@ class Scanmon(ttk.Frame):
 		def drain(self):
 			self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
 			resp = self.scanner.drain()
-			logger.warning('Drained: %s', str(resp))
+			self.logger.warning('Drained: "%s"', str(resp))
 	
 		def do_message(self, message):
 			if not isinstance(message, Scanmon.MonitorRequest):
@@ -206,7 +211,7 @@ class Scanmon(ttk.Frame):
 					else: 
 						self.set_status('No SQL and no FRQ/TGID??')
 				except KeyError:
-					self.logger.exception('Bad response from GLG: %s', str(resp))
+					self.logger.error('Bad response from GLG: %s', str(resp))
 					self.set_status('Bad response from GLG')
 					self.drain()
 			
@@ -245,6 +250,11 @@ class Scanmon(ttk.Frame):
 		ch = logging.StreamHandler(stream = sys.stderr)
 		ch.setLevel(self.logLevel)
 
+		# Create SysLog handler and set level
+		slh = SysLogHandler()
+		slh.setLevel(self.logLevel)
+		slh.ident = Scanmon.logName
+
 		# Create formatter
 		formatter = logging.Formatter(fmt = '{asctime} - {name} - {levelname} - {message}',
 			style = '{')
@@ -252,7 +262,11 @@ class Scanmon(ttk.Frame):
 		# Add formatter to ch
 		ch.setFormatter(formatter)
 
+		# Add formatter to slh
+		slh.setFormatter(formatter)
+
 		self.logger.addHandler(ch)
+		self.logger.addHandler(slh)
 		
 		# Setup queues
 

@@ -340,7 +340,7 @@ class Decode:
 				if addgroups:
 					basedict.update({'groups': rematch.groups(default='')})
 			else:
-				 basedict.update({'iserror': True, 'errorcode': Decode.ERR_NOMATCH})
+				 basedict.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_NOMATCH})
 	
 		def runIt(target, request, basedict, addgroups = False):
 			nonlocal doIt
@@ -367,7 +367,7 @@ class Decode:
 		prematch = prematchre.match(tomatch)
 		if prematch is None: 
 			Scanner.logger.error('Prematch failed for: %s', tomatch)
-			matchresult.update({'iserror': True, 'errorcode': Decode.ERR_PREMATCH})
+			matchresult.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_PREMATCH})
 		
 		else:	# Prematch OK, try the main event
 			# Update the results
@@ -377,8 +377,8 @@ class Decode:
 			Scanner.logger.debug('Prematch found: %s', str(resp))
 	
 			if resp in ERRORRESP:		# Error response, can't go further
-				Scanner.logger.error('Scanner error response: %s', tomatch)
-				matchresult.update({'CMD': resp, 'iserror': True, 'errorcode': Decode.ERR_RESPONSE})
+				Scanner.logger.error('Scanner error response: "%s"', tomatch)
+				matchresult.update({'CMD': resp, Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_RESPONSE})
 		
 			elif resp in dec.Decodes:
 				matchresult['CMD'] = resp
@@ -400,7 +400,7 @@ class Decode:
 		
 			else:
 				Scanner.logger.error('Scanner unknown response: %s', tomatch)
-				matchresult.update({'iserror': True, 'errorcode': Decode.ERR_UNKNOWN_RESPONSE})
+				matchresult.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_UNKNOWN_RESPONSE})
 		
 		return matchresult
 
@@ -421,7 +421,7 @@ class Scanner(Serial):
 
 	_sio_lock = threading.RLock()
 
-	def __init__(self, port = None, baudrate = 0, timeout = 0.2, logname = __name__):
+	def __init__(self, port = None, baudrate = 0, timeout = 0.25, logname = __name__):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
@@ -483,11 +483,13 @@ class Scanner(Serial):
 		'''
 		with Scanner._sio_lock:	# Ensure we don't do two write/reads at the same time
 			self._sio.write(cmd_string + '\r')
-			self._sio.flush()	# Note sure we need this ...
+			#self._sio.flush()	# Note sure we need this ...
 		
 			rawresp = self._sio.readline().encode('ISO-8859-1')
 			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
+				Scanner.logger.warning('Scanner returned null response, retrying')
 				rawresp = self._sio.readline().encode('ISO-8859-1')
+				Scanner.logger.warning('Received: "%s"', str(rawresp))
 		
 			if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
 		
@@ -511,7 +513,7 @@ class Scanner(Serial):
 			Scanner.logger.warning('Drain wait')
 			time.sleep(0.5)	# wait a bit
 			Scanner.logger.warning('Drain read')
-			resp = self._sio.readlines().encode('ISO-8859-1')
+			resp = self._sio.readlines()
 			Scanner.logger.warning('Drain received: ' + str(resp))
 			return resp 
 			
