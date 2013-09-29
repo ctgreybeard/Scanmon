@@ -42,6 +42,8 @@ class Scanmon(ttk.Frame):
 			self.callback = callback
 			self.message = message
 
+	# END class MonitorRequest
+	
 	class Monitor(Thread):
 
 		def __init__(self, scanner, my_queue, their_queue, barrier, *args, **kw):
@@ -68,6 +70,8 @@ class Scanmon(ttk.Frame):
 			#self.logger.setLevel(Scanmon.logLevel)
 			self.logger.info('Monitor initialized')
 			self.barrier = barrier
+			self.drainMax = 3	# Max drain count
+			self.drainCount = 0
 	
 		def queue_message(self, type, message, request = None):
 			if request is None:		# No current request, make a new one
@@ -146,9 +150,14 @@ class Scanmon(ttk.Frame):
 		
 		# Drain is only used when there may be a big problem
 		def drain(self):
-			self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
-			resp = self.scanner.drain()
-			self.logger.warning('Drained: "%s"', str(resp))
+			self.drainCount += 1
+			if self.drainCount > self.drainMax:
+				self.logger.critical('Drain count exceeded')
+				self.do_stop()
+			else:
+				self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
+				self.scanner.drain()
+				self.logger.warning('Drained')
 	
 		def do_message(self, message):
 			if not isinstance(message, Scanmon.MonitorRequest):
@@ -398,17 +407,10 @@ class Scanmon(ttk.Frame):
 		b_close = ttk.Button(self, text = 'Close', width = 8, command = self.do_close)
 		#b_start = ttk.Button(self, textvariable = self.tv_start, width = 8, command = do_start)
 
-		# Sizegrip
-		#b_sizegrip = ttk.Sizegrip(root)
-
 		# Static labels
 		l_rcv = ttk.Label(self, text = 'Rcv:')
 		l_vol = ttk.Label(self, text = 'Volume:')
 		l_sql = ttk.Label(self, text = 'Squelch:')
-
-		# Define Data Display Styles
-		#s_ddisp = ttk.Style()
-		#s_ddisp.configure('DDisp.TLabel', 
 
 		# Data Display labels
 
@@ -492,12 +494,6 @@ class Scanmon(ttk.Frame):
 		l_status.grid(column = 0, row = 0, sticky = EW)
 		l_model.grid(column = 0, row = 11, sticky = E, columnspan = 4)
 		l_version.grid(column = 5, row = 11, sticky = W, columnspan = 2)
-
-		# Window is not resizable but if it were this is how we would show it
-		#b_sizegrip.grid(column = 1, row = 1)
-
-		#root.columnconfigure(0, weight = 1)
-		#root.rowconfigure(0, weight = 1)
 
 		self.rowconfigure(7, pad=10)
 		self.rowconfigure(8, pad=10)
