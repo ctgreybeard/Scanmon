@@ -419,16 +419,15 @@ class Scanner(Serial):
 		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'), 
 		('publicsafety', '1'), ('racing', '9'), ('railroad', '5'), ('special', '12')))
 
-	_sio_lock = threading.RLock()
-
 	def __init__(self, port = None, baudrate = 0, timeout = 0.25, logname = __name__):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
 		
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
-		self._sio = io.TextIOWrapper(io.BufferedRWPair(self, self),
-			newline='\r', line_buffering=True, encoding = 'ISO-8859-1')
+		self._sior = io.BufferedReader(self)
+		self._siow = io.BufferedWriter(self)
+
 		self.MDL = '?'
 		self.VER = '?'
 		Scanner.logger = logging.getLogger(logname)
@@ -436,6 +435,8 @@ class Scanner(Serial):
 		if port is not None:
 			self.logopen()
 	
+		self._sio_lock = threading.RLock()
+
 	def logopen(self):
 		if self.isOpen():
 			self.MDL = self.cmd('MDL').split(',')[-1]
@@ -467,7 +468,7 @@ class Scanner(Serial):
 		else:
 			Scanner.logger.info('Found device on: %s', self.port)
 		
-		self.baudrate = 115200	# Temporary default
+		self.baudrate = 19200	# Temporary default
 		
 		self.open()
 		
@@ -475,20 +476,46 @@ class Scanner(Serial):
 		
 		return self.isOpen()
 
+	def _readresp(self):
+		b = bytes()
+		gotline = False
+
+		def timeout():
+			nonlocal gotline
+			
+			self.logger.warning('Readresp Timeout, got "%s" so far', str(b))
+			gotline = True
+			
+		to = threading.Timer(2, timeout)
+		to.start()
+		try:
+			while not gotline:
+				c = self._sior.read(1)
+
+				if len(c) > 0:
+					b += c
+					if c[-1] == 13:		# ord(b'\r') == 13
+						gotline = True
+		except:
+			print('Oops ... got "{}" so far ...'.format(b))
+		
+		to.cancel()
+		return b
+		
 	def cmd(self, cmd_string, cooked = COOKED):
 		'''
 		Send a command and return the response
 		
 		The line ending '\r' is automatically added and removed
 		'''
-		with Scanner._sio_lock:	# Ensure we don't do two write/reads at the same time
-			self._sio.write(cmd_string + '\r')
-			#self._sio.flush()	# Note sure we need this ...
+		with self._sio_lock:	# Ensure we don't do two write/reads at the same time
+			self._siow.write((cmd_string + '\r').encode('ISO-8859-1'))
+			self._siow.flush()
 		
-			rawresp = self._sio.readline().encode('ISO-8859-1')
+			rawresp = self._readresp()
 			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
 				Scanner.logger.warning('Scanner returned null response, retrying')
-				rawresp = self._sio.readline().encode('ISO-8859-1')
+				rawresp = self._readresp()
 				Scanner.logger.warning('Received: "%s"', str(rawresp))
 		
 			if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
@@ -507,15 +534,14 @@ class Scanner(Serial):
 	# Drain is only used when there may be a problem. It is supposed to resynchronize the streams
 	# This takes a while so don't use it lightly
 	def drain(self):
-		with Scanner._sio_lock: # Grab the interface
+		with self._sio_lock: # Grab the interface
 			Scanner.logger.warning('Draining...')
-			self._sio.flush()	# Flush any output
-			Scanner.logger.warning('Drain wait')
-			time.sleep(0.5)	# wait a bit
-			Scanner.logger.warning('Drain read')
-			resp = self._sio.readlines()
-			Scanner.logger.warning('Drain received: ' + str(resp))
-			return resp 
+			self._siow.flush()		# Flush any output
+			self._sior.detach()		# Dump the current BufferedReader
+			self._siow.detach()		# And the current BufferedWriter
+			self._sior = io.BufferedReader(self)
+			self._siow = io.BufferedWriter(self)
+			return
 			
 		
 	def cookIt(self, resp):
