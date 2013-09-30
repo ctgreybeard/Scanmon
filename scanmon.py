@@ -171,7 +171,7 @@ class Scanmon(ttk.Frame):
 				main.check_vol()
 				main.check_sql()
 				main.check_hold()
-				time.sleep(0.8)		# Give others time to run
+				time.sleep(0.5)		# Give others time to run
 
 		def run(self):	# Overrides the default Thread run (which does nothing)
 	
@@ -223,13 +223,15 @@ class Scanmon(ttk.Frame):
 					self.logger.error('Bad response from GLG: %s', str(resp))
 					self.set_status('Bad response from GLG')
 					self.drain()
-			
 
 				try:
 					while True:
 						self.do_message(self.my_queue.get(block = False))
 				except Empty:
 					pass
+				
+				# Finally, wait a bit to lessen the load
+				time.sleep(0.5)
 
 		def do_stop(self):
 			self.set_status('Monitor ending')
@@ -260,7 +262,7 @@ class Scanmon(ttk.Frame):
 		ch.setLevel(self.logLevel)
 
 		# Create SysLog handler and set level
-		slh = SysLogHandler()
+		slh = SysLogHandler(address='/var/run/syslog')
 		slh.setLevel(self.logLevel)
 		slh.ident = Scanmon.logName
 
@@ -320,7 +322,7 @@ class Scanmon(ttk.Frame):
 
 	def set_vol(self):
 		self.send_cmd('VOL,{}'.format(self.tv_vol.get()))
-		if self.isMute:
+		if self.isMute and int(self.tv_vol.get()) > 0:
 			self.isMute = False
 			self.tv_mute.set('Mute')
 			self.set_status('Unmute')
@@ -350,9 +352,8 @@ class Scanmon(ttk.Frame):
 	def do_mute(self):
 		self.set_status('Commanded to Mute')
 		if self.isMute:	# Unmute
-			self.tv_vol.set(oVol)
+			self.tv_vol.set(self.oVol)
 			self.set_vol()
-			self.set_status('Unmute')
 		else:		# Mute
 			self.oVol = self.tv_vol.get()
 			self.tv_vol.set('0')
@@ -456,11 +457,13 @@ class Scanmon(ttk.Frame):
 
 		# The spinboxes
 		self.tv_vol = StringVar()
-		s_vol = Spinbox(self, from_ = 0, to = 29, increment = 1, justify = RIGHT,
-			state = 'readonly', width = 4, textvariable = self.tv_vol, command = self.set_vol)
+		s_vol = Spinbox(self, from_ = 0, to = 29, increment = 1, 
+			justify = RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
+			state = 'readonly', textvariable = self.tv_vol, command = self.set_vol)
 		self.tv_sql = StringVar()
-		s_sql = Spinbox(self, from_ = 0, to = 19, increment = 1, justify = RIGHT,
-			state = 'readonly', width = 4, textvariable = self.tv_sql, command = self.set_sql)
+		s_sql = Spinbox(self, from_ = 0, to = 19, increment = 1, 
+			justify = RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
+			state = 'readonly', textvariable = self.tv_sql, command = self.set_sql)
 
 		# Grid the rest into the Frame
 		b_lockout.grid(column = 0, row = 1, columnspan = 2, rowspan = 2)
