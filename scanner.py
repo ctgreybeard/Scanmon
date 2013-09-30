@@ -6,9 +6,10 @@ Uniden Scanner utilities and programming access
 Module and class to communicate with a Uniden DMA scanner (BCD996XT, BCD396XT, etc.)
 """
 
-import io, re, types, threading, time, logging
+import re, types, threading, time, logging
 from serial import Serial
 from glob import glob
+from select import select
 
 # A useful function
 def _lineno(lineidx): return '123456789'[lineidx:lineidx+1]
@@ -425,8 +426,6 @@ class Scanner(Serial):
 		'''
 		
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
-		self._sior = io.BufferedReader(self)
-		self._siow = io.BufferedWriter(self)
 
 		self.MDL = '?'
 		self.VER = '?'
@@ -439,6 +438,9 @@ class Scanner(Serial):
 
 	def logopen(self):
 		if self.isOpen():
+			# Set non-blocking
+			self.nonblocking()
+
 			self.MDL = self.cmd('MDL').split(',')[-1]
 			self.VER = self.cmd('VER').split(',')[-1]
 			Scanner.logger.info('Scanner model: %s, version: %s', self.MDL, self.VER)
@@ -479,6 +481,7 @@ class Scanner(Serial):
 	def _readresp(self):
 		b = bytes()
 		gotline = False
+		fileno = self.fileno()
 
 		def timeout():
 			nonlocal gotline
@@ -488,16 +491,15 @@ class Scanner(Serial):
 			
 		to = threading.Timer(2, timeout)
 		to.start()
-		try:
-			while not gotline:
-				c = self._sior.read(1)
 
-				if len(c) > 0:
-					b += c
-					if c[-1] == 13:		# ord(b'\r') == 13
-						gotline = True
-		except:
-			print('Oops ... got "{}" so far ...'.format(b))
+		while not gotline:
+			select((fileno,), (), (), 1.0)
+			c = self.read(1)
+
+			if len(c) > 0:
+				b += c
+				if c[-1] == 13:		# ord(b'\r') == 13
+					gotline = True
 		
 		to.cancel()
 		return b
@@ -509,8 +511,8 @@ class Scanner(Serial):
 		The line ending '\r' is automatically added and removed
 		'''
 		with self._sio_lock:	# Ensure we don't do two write/reads at the same time
-			self._siow.write((cmd_string + '\r').encode('ISO-8859-1'))
-			self._siow.flush()
+			self.write((cmd_string + '\r').encode('ISO-8859-1'))
+			self.flush()
 		
 			rawresp = self._readresp()
 			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
@@ -536,11 +538,8 @@ class Scanner(Serial):
 	def drain(self):
 		with self._sio_lock: # Grab the interface
 			Scanner.logger.warning('Draining...')
-			self._siow.flush()		# Flush any output
-			self._sior.detach()		# Dump the current BufferedReader
-			self._siow.detach()		# And the current BufferedWriter
-			self._sior = io.BufferedReader(self)
-			self._siow = io.BufferedWriter(self)
+			self.flushOutput()		# Flush any output
+			self.flushInput()		# Flush any input too
 			return
 			
 		
