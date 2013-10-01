@@ -470,7 +470,7 @@ class Scanner(Serial):
 		else:
 			Scanner.logger.info('Found device on: %s', self.port)
 		
-		self.baudrate = 19200	# Temporary default
+		self.baudrate = 115200
 		
 		self.open()
 		
