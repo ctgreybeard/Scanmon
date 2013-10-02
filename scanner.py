@@ -420,7 +420,7 @@ class Scanner(Serial):
 		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'), 
 		('publicsafety', '1'), ('racing', '9'), ('railroad', '5'), ('special', '12')))
 
-	def __init__(self, port = None, baudrate = 0, timeout = 0.25, logname = __name__):
+	def __init__(self, port = None, baudrate = 0, timeout = 0.25, logname = __name__, loglevel = logging.WARNING):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
@@ -430,6 +430,7 @@ class Scanner(Serial):
 		self.MDL = '?'
 		self.VER = '?'
 		Scanner.logger = logging.getLogger(logname)
+		Scanner.logger.setLevel(loglevel)
 
 		if port is not None:
 			self.logopen()
