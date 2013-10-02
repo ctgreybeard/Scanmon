@@ -63,7 +63,7 @@ class Scanmon(ttk.Frame):
 				'channel': '',
 				'frequency': '',
 				'starttime': '',
-			}, 'SETSYSDISP']
+			}, 'RPC', self.mainwin.set_sys_disp]
 			self.tv_dur = ['', 'RPC', self.mainwin.tv_dur.set]
 			self.cur_frq = ''
 			self.start_time = None
@@ -111,7 +111,7 @@ class Scanmon(ttk.Frame):
 		def set_dur(self, dur):
 			self.set_it(self.tv_dur, dur)
 
-		def set_sys_disp(self, **disp):
+		def send_sys_disp(self, **disp):
 			self.set_it(self.tv_sys_disp, disp)
 
 		def check_spin(self, tv, cmd, var):
@@ -210,7 +210,7 @@ class Scanmon(ttk.Frame):
 							self.start_time = now_time
 							self.send_rcv_ind('#0e0')
 							self.cur_frq = this_frq
-							self.set_sys_disp(
+							self.send_sys_disp(
 								frequency = this_frq,
 								system = resp['NAME1'],
 								group = resp['NAME2'],
@@ -295,21 +295,24 @@ class Scanmon(ttk.Frame):
 		self.a_status = self.a_status[1:]
 		self.tv_status.set('\n'.join(self.a_status))
 
+	def set_sys_disp(self, disp):
+		try:
+			self.tv_sys.set(disp['system'])
+			self.tv_grp.set(disp['group'])
+			self.tv_chn.set(disp['channel'])
+			self.tv_dur.set(disp['duration'])
+			self.tv_time.set(disp['starttime'])
+			self.tv_frq.set(disp['frequency'])
+		except KeyError:
+			self.logger.warning('Key Error in SETSYSDISP: %s', disp)
+
 	def run_request(self, request):
 		self.logger.debug('Running req: %s', str(request))
 		rtype = request.req_type
 		if rtype == Scanmon.MonitorRequest.REQUESTS['RPC']:
 			request.rpc(request.message, **request.kw)
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETSYSDISP']:
-			try:
-				self.tv_sys.set(request.message['system'])
-				self.tv_grp.set(request.message['group'])
-				self.tv_chn.set(request.message['channel'])
-				self.tv_dur.set(request.message['duration'])
-				self.tv_time.set(request.message['starttime'])
-				self.tv_frq.set(request.message['frequency'])
-			except KeyError:
-				self.logger.warning('Key Error in SETSYSDISP: %s', request.message)
+		else:
+			self.logger.warning('Unknown RPC request type: %s', rtype)
 
 	def send_cmd(self, cmd):
 		self.to_mon_queue.put(Scanmon.MonitorRequest(Scanmon.MonitorRequest.REQUESTS['CMD'], cmd))
