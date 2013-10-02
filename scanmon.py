@@ -15,7 +15,8 @@ from queue import Queue, Empty
 class Scanmon(ttk.Frame):
 
 	logName = 'scanmon'
-	logLevel = logging.INFO
+#	logLevel = logging.DEBUG
+	logLevel = logging.WARNING
 	
 	class MonitorRequest:
 	
@@ -23,39 +24,39 @@ class Scanmon(ttk.Frame):
 			# 1-99 to Monitor
 			'CMD': 1,	# Send scanner command ->Monitor
 			'MCMD': 2,	# Multi-command request
-			# 100-199 bi-directional (maybe)
-			'SETVOL': 101, 	# Set window status message/scanner
-			'SETSQL': 102, 	# Set window status message/scanner
-			# 200-200 to Application
+			# 200-299 to Application
+			'RPC': 200,
 			'CALLBACK' : 201,
-			'SETSTATUS': 202, 	# Set window status message
-			'SETHOLD': 203, 	# Set Hold button text
-			'SETRCVIND': 204, 	# Set receive indicator color
-			'SETDUR': 205, 	# Set receive duration display
 			'SETSYSDISP': 206, 	# Set received system display
 		}
 	
-		def __init__(self, req_type, message, response = None, callback = None):
+		def __init__(self, req_type, message, rpc = None, response = None, callback = None, **kw):
 			self.req_type = req_type
 			self.orig_type = None
 			self.response = response
 			self.callback = callback
+			self.rpc = rpc
 			self.message = message
+			self.kw = kw
+		
+		def __str__(self):
+			return 'Type:{}, message={}, kw={}, orig_type={}, response={}, callback={}'.format(self.req_type, self.message, self.kw, self.orig_type, self.response, self.callback)
 
 	# END class MonitorRequest
 	
 	class Monitor(Thread):
 
-		def __init__(self, scanner, my_queue, their_queue, barrier, *args, **kw):
+		def __init__(self, mainwin, scanner, my_queue, their_queue, barrier, *args, **kw):
 			Thread.__init__(self, **kw)
+			self.mainwin = mainwin
 			self.my_queue = my_queue		# Messages TO the Monitor
 			self.their_queue = their_queue	# Messages FROM the Monitor
 			self.scanner = scanner
 			# Set some local tracking variables, guaranteed not to match at startup
-			self.tv_vol = ['', 'SETVOL']
-			self.tv_sql = ['', 'SETSQL']
-			self.tv_hold_b = [False, 'SETHOLD']
-			self.tv_rcv_ind = ['', 'SETRCVIND']
+			self.tv_vol = ['', 'RPC', self.mainwin.tv_vol.set]
+			self.tv_sql = ['', 'RPC', self.mainwin.tv_sql.set]
+			self.tv_hold_resume = ['', 'RPC', self.mainwin.tv_hold_resume.set]
+			self.tv_rcv_ind = ['', 'RPC', self.mainwin.set_rcv_ind]
 			self.tv_sys_disp = [{
 				'system': '',
 				'group':  '',
@@ -63,8 +64,8 @@ class Scanmon(ttk.Frame):
 				'frequency': '',
 				'starttime': '',
 			}, 'SETSYSDISP']
+			self.tv_dur = ['', 'RPC', self.mainwin.tv_dur.set]
 			self.cur_frq = ''
-			self.tv_dur = ['', 'SETDUR']
 			self.start_time = None
 			self.logger = logging.getLogger(Scanmon.logName + '.monitor')
 			#self.logger.setLevel(Scanmon.logLevel)
@@ -73,24 +74,30 @@ class Scanmon(ttk.Frame):
 			self.drainMax = 3	# Max drain count
 			self.drainCount = 0
 	
-		def queue_message(self, type, message, request = None):
+		def queue_message(self, type, message, rpc = None, request = None, **kw):
 			if request is None:		# No current request, make a new one
-				request = Scanmon.MonitorRequest(type, message)
+				request = Scanmon.MonitorRequest(type, message, rpc = rpc, **kw)
 			else:
 				request.orig_type = request.req_type	# Save the original type
 				request.req_type = type
 				request.message = message
-		
+				request.kw = kw
+			
+			self.logger.debug('Queueing msg: %s', str(request))
 			self.their_queue.put(request)
 		
-		def set_status(self, status):
+		def send_status(self, status):
 			self.logger.info('Set Status: %s', status)
-			self.queue_message(Scanmon.MonitorRequest.REQUESTS['SETSTATUS'], status)
+			self.queue_message(Scanmon.MonitorRequest.REQUESTS['RPC'], status, rpc = self.mainwin.set_status)
 
 		def set_it(self, it, val):
+			self.logger.debug('set_it: it={}, val={}'.format(it, val))
 			if it[0] != val:
 				it[0] = val
-				self.queue_message(Scanmon.MonitorRequest.REQUESTS[it[1]], val)
+				if it[1] == 'RPC':
+					self.queue_message(Scanmon.MonitorRequest.REQUESTS[it[1]], val, rpc = it[2])
+				else:
+					self.queue_message(Scanmon.MonitorRequest.REQUESTS[it[1]], val)
 
 		def set_vol(self, vol):
 			self.set_it(self.tv_vol, vol)
@@ -98,13 +105,13 @@ class Scanmon(ttk.Frame):
 		def set_sql(self, sql):
 			self.set_it(self.tv_sql, sql)
 
-		def set_rcv_ind(self, ind):
+		def send_rcv_ind(self, ind):
 			self.set_it(self.tv_rcv_ind, ind)
 
 		def set_dur(self, dur):
 			self.set_it(self.tv_dur, dur)
 
-		def set_sys_disp(self, disp):
+		def set_sys_disp(self, **disp):
 			self.set_it(self.tv_sys_disp, disp)
 
 		def check_spin(self, tv, cmd, var):
@@ -129,10 +136,10 @@ class Scanmon(ttk.Frame):
 			try:
 				resp = self.send_cmd('STS')
 				l1 = resp['L1_CHAR']
-				is_hold = True if l1.startswith(' ????') else False
-				if is_hold != self.tv_hold_b[0]:
-					self.set_status('Hold' if is_hold else 'Resume')
-				self.set_it(self.tv_hold_b, is_hold)
+				is_hold = 'Resume' if l1.startswith(' ????') else 'Hold'
+				if is_hold != self.tv_hold_resume[0]:
+					self.send_status('Run' if is_hold == 'Hold' else 'Hold')
+				self.set_it(self.tv_hold_resume, is_hold)
 			except KeyError:
 				self.logger.warning('STS returned: "%s"', str(resp))
 
@@ -155,7 +162,7 @@ class Scanmon(ttk.Frame):
 				self.logger.critical('Drain count exceeded')
 				self.do_stop()
 			else:
-				self.set_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
+				self.send_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
 				self.scanner.drain()
 				self.logger.warning('Drained')
 	
@@ -179,7 +186,7 @@ class Scanmon(ttk.Frame):
 			self.now_time = datetime.today()
 			self.cur_frq = ''
 			self.logger.info('Monitor starting')
-			self.set_status('Monitor starting')
+			self.send_status('Monitor starting')
 			self.monitor_running = True
 			# Start the status monitor running
 			self.status_checks = Thread(target = self.do_checks, args = (self, ))
@@ -191,37 +198,31 @@ class Scanmon(ttk.Frame):
 				try:
 					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
 					if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
-						self.set_rcv_ind('#e00')
-						#tv_sys.set('')	# We don't clear the previous system's values
-						#tv_grp.set('')
-						#tv_chn.set('')
-						#tv_frq.set('')
-						#tv_dur.set('')
-						#tv_time.set('')
+						self.send_rcv_ind('#e00')
 						self.cur_frq = ''
 						self.start_time = None
 					elif resp['FRQ_TGID'] != '':
 						now_time = datetime.today()	# Capture the moment
 						this_frq = eval(resp['FRQ_TGID'])
 						if self.cur_frq == this_frq:	# Same frequency
-							self.set_it(self.tv_dur, str(int((now_time - self.start_time).total_seconds())))
+							self.set_dur(str(int((now_time - self.start_time).total_seconds())))
 						else:
 							self.start_time = now_time
-							self.set_it(self.tv_rcv_ind, '#0e0')
+							self.send_rcv_ind('#0e0')
 							self.cur_frq = this_frq
-							self.set_it(self.tv_sys_disp,
-								{'frequency': this_frq,
-								'system': resp['NAME1'],
-								'group': resp['NAME2'],
-								'channel': resp['NAME3'],
-								'duration': '0',
-								'starttime': now_time.strftime('%m/%d/%y %H:%M:%S')})
-							self.set_it(self.tv_dur, '0')
+							self.set_sys_disp(
+								frequency = this_frq,
+								system = resp['NAME1'],
+								group = resp['NAME2'],
+								channel = resp['NAME3'],
+								duration = '0',
+								starttime = now_time.strftime('%m/%d/%y %H:%M:%S'))
+							self.set_dur('0')
 					else: 
-						self.set_status('No SQL and no FRQ/TGID??')
+						self.send_status('No SQL and no FRQ/TGID??')
 				except KeyError:
 					self.logger.error('Bad response from GLG: %s', str(resp))
-					self.set_status('Bad response from GLG')
+					self.send_status('Bad response from GLG')
 					self.drain()
 
 				try:
@@ -234,7 +235,7 @@ class Scanmon(ttk.Frame):
 				time.sleep(0.5)
 
 		def do_stop(self):
-			self.set_status('Monitor ending')
+			self.send_status('Monitor ending')
 			self.monitor_running = False
 			self.status_checks.join(timeout = 3)
 
@@ -295,27 +296,20 @@ class Scanmon(ttk.Frame):
 		self.tv_status.set('\n'.join(self.a_status))
 
 	def run_request(self, request):
+		self.logger.debug('Running req: %s', str(request))
 		rtype = request.req_type
-		self.logger.debug('Req=%s: "%s"', rtype, request.message)
-		if rtype == Scanmon.MonitorRequest.REQUESTS['SETVOL']:
-			self.tv_vol.set(request.message)
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETSQL']:
-			self.tv_sql.set(request.message)
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETSTATUS']:
-			self.set_status(request.message)
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETHOLD']:
-			self.tv_hold_resume.set('Resume' if request.message else 'Hold')
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETRCVIND']:
-			self.l_rcv_ind.configure(background = request.message)
-		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETDUR']:
-			self.tv_dur.set(request.message)
+		if rtype == Scanmon.MonitorRequest.REQUESTS['RPC']:
+			request.rpc(request.message, **request.kw)
 		elif rtype == Scanmon.MonitorRequest.REQUESTS['SETSYSDISP']:
-			self.tv_sys.set(request.message['system'])
-			self.tv_grp.set(request.message['group'])
-			self.tv_chn.set(request.message['channel'])
-			self.tv_dur.set(request.message['duration'])
-			self.tv_time.set(request.message['starttime'])
-			self.tv_frq.set(request.message['frequency'])
+			try:
+				self.tv_sys.set(request.message['system'])
+				self.tv_grp.set(request.message['group'])
+				self.tv_chn.set(request.message['channel'])
+				self.tv_dur.set(request.message['duration'])
+				self.tv_time.set(request.message['starttime'])
+				self.tv_frq.set(request.message['frequency'])
+			except KeyError:
+				self.logger.warning('Key Error in SETSYSDISP: %s', request.message)
 
 	def send_cmd(self, cmd):
 		self.to_mon_queue.put(Scanmon.MonitorRequest(Scanmon.MonitorRequest.REQUESTS['CMD'], cmd))
@@ -329,6 +323,9 @@ class Scanmon(ttk.Frame):
 
 	def set_sql(self):
 		self.send_cmd('SQL,{}'.format(self.tv_sql.get()))
+	
+	def set_rcv_ind(self, val):
+		self.l_rcv_ind.configure(background = val)
 	
 	def cmd_status(self, cmd, status):
 		self.send_cmd(cmd)
@@ -388,7 +385,6 @@ class Scanmon(ttk.Frame):
 
 		# Text variables used below
 		self.tv_hold_resume = StringVar(value = 'Hold')
-		self.tv_hold_b = False
 		self.tv_mute = StringVar(value = 'Mute')
 		#tv_start = StringVar(value = 'Start')
 		self.tv_status = StringVar()
@@ -417,7 +413,6 @@ class Scanmon(ttk.Frame):
 
 		# l_rcv_ind must be accessible later
 		self.l_rcv_ind = ttk.Label(self, text = '    ', background = '#00e')
-		
 		lf_sys = ttk.LabelFrame(self, text = 'System', padding = (5, 0))
 		self.tv_sys = StringVar()
 		l_sys = ttk.Label(lf_sys, textvariable = self.tv_sys, width = 16)
@@ -513,10 +508,11 @@ class Scanmon(ttk.Frame):
 		barrier = Barrier(2, timeout = 10)
 
 		self.thr_monitor = Scanmon.Monitor(
-			self.scanner, 
-			self.to_mon_queue, 
-			self.from_mon_queue, 
-			barrier, 
+			self,					# Master
+			self.scanner,			# Scanner
+			self.to_mon_queue,		# To queue
+			self.from_mon_queue,	# From queue
+			barrier,				# Barrier
 			name = 'Monitor', )
 		self.thr_monitor.start()
 		barrier.wait()
@@ -527,17 +523,23 @@ class Scanmon(ttk.Frame):
 			self.thr_monitor.scanner.MDL, 
 			self.thr_monitor.scanner.VER)
 
-		while self.run_app:		# Util we are done ...
-			if not self.thr_monitor.isAlive():
-				self.run_app = False
-				self.logger.critical('Monitor thread died! Quitting...')
-			self.update()
-			try:
-				request = self.from_mon_queue.get(timeout = 0.1)
-				self.run_request(request)
-			except Empty:
-				pass
-
+		try:
+			while self.run_app:		# Util we are done ...
+				if not self.thr_monitor.isAlive():
+					self.run_app = False
+					self.logger.critical('Monitor thread died! Quitting...')
+				self.update()
+				try:
+					request = self.from_mon_queue.get(timeout = 0.1)
+					self.run_request(request)
+				except Empty:
+					pass
+		except:
+			dumpit = sys.exc_info()
+			self.logger.critical('Failed', exc_info = dumpit)
+			self.do_close()
+			self.quit()
+			
 # END class Scanmon
 
 if __name__ == '__main__':
