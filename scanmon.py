@@ -3,7 +3,7 @@
 Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
-import re, types, time, sys, logging
+import re, types, time, sys, logging, itertools
 from logging.handlers import SysLogHandler
 from datetime import datetime
 from scanner import Scanner, Decode
@@ -15,7 +15,7 @@ from queue import Queue, Empty
 class Scanmon(ttk.Frame):
 
 	logName = 'scanmon'
-#	logLevel = logging.DEBUG
+	logLevel = logging.DEBUG
 	logLevel = logging.WARNING
 	
 	class MonitorRequest:
@@ -121,6 +121,7 @@ class Scanmon(ttk.Frame):
 			else:
 				try:
 					aval = int(resp[var])	# Actual Value
+					self.logger.debug('Check spin: cmd=%s, aval=%s tv=%s', cmd, aval, tv)
 					self.set_it(tv, aval)
 				except: 
 					pass
@@ -172,13 +173,10 @@ class Scanmon(ttk.Frame):
 				raise ValueError('Non-MonitorRequest received')
 			if message.req_type == Scanmon.MonitorRequest.REQUESTS['CMD']:
 				self.send_cmd(message.message)
-	
-		def do_checks(self, main):
-			while main.monitor_running:
-				main.check_vol()
-				main.check_sql()
-				main.check_hold()
-				time.sleep(0.5)		# Give others time to run
+			elif message.req_type == Scanmon.MonitorRequest.REQUESTS['MCMD']:
+				pass
+			elif message.req_type == Scanmon.MonitorRequest.REQUESTS['RPC']:
+				message.rpc(message.message)
 
 		def run(self):	# Overrides the default Thread run (which does nothing)
 	
@@ -189,8 +187,7 @@ class Scanmon(ttk.Frame):
 			self.send_status('Monitor starting')
 			self.monitor_running = True
 			# Start the status monitor running
-			self.status_checks = Thread(target = self.do_checks, args = (self, ))
-			self.status_checks.start()
+			self.status_checks = itertools.cycle((self.check_vol, self.check_sql, self.check_hold))
 			self.barrier.wait()
 
 			while self.monitor_running:
@@ -224,6 +221,9 @@ class Scanmon(ttk.Frame):
 					self.logger.error('Bad response from GLG: %s', str(resp))
 					self.send_status('Bad response from GLG')
 					self.drain()
+				
+				# Do one status check - Weird syntax is correct
+				self.status_checks.__next__()()
 
 				try:
 					while True:
@@ -232,17 +232,16 @@ class Scanmon(ttk.Frame):
 					pass
 				
 				# Finally, wait a bit to lessen the load
-				time.sleep(0.5)
+				time.sleep(0.2)
 
 		def do_stop(self):
 			self.send_status('Monitor ending')
 			self.monitor_running = False
-			self.status_checks.join(timeout = 3)
 
 	# END class Monitor
 	
 	def __init__(self, master = None):
-		ttk.Frame.__init__(self, master)
+		ttk.Frame.__init__(self, master, class_ = 'Scanmon')
 		
 		self.scanner = Scanner(logname = Scanmon.logName + '.scanner')
 		if not self.scanner.isOpen():
@@ -286,6 +285,10 @@ class Scanmon(ttk.Frame):
 		self.from_mon_queue = Queue()
 		
 		self.buildWindow()
+		
+	def destroy(self):
+		ttk.Frame.destroy(self)
+		self.master.destroy()
 
 	# All routines are defined here
 
@@ -328,7 +331,7 @@ class Scanmon(ttk.Frame):
 		self.send_cmd('SQL,{}'.format(self.tv_sql.get()))
 	
 	def set_rcv_ind(self, val):
-		self.l_rcv_ind.configure(background = val)
+		self.l_rcv_ind['background'] = val
 	
 	def cmd_status(self, cmd, status):
 		self.send_cmd(cmd)
@@ -394,18 +397,55 @@ class Scanmon(ttk.Frame):
 
 		# Define the buttons
 
-		b_lockout = ttk.Button(self, text = 'Lockout', width = 8, command = self.do_lockout)
-		b_skip = ttk.Button(self, text = 'Skip', width = 8, command = self.do_skip)
+		b_lockout = ttk.Button(self, 
+			name = 'lockoutButton', 
+			text = 'Lockout', 
+			width = 8, 
+			command = self.do_lockout)
+		b_skip = ttk.Button(self, 
+			name = 'skipButton', 
+			text = 'Skip', 
+			width = 8, 
+			command = self.do_skip)
 		b_hold_resume = ttk.Button(self, 
-			textvariable = self.tv_hold_resume, width = 8, command = self.do_hold)
-		b_scan = ttk.Button(self, text = 'Scan', width = 8, command = self.do_scan)
-		b_bookmark = ttk.Button(self, text = 'Bookmark', width = 8, command = self.do_bookmark)
-		b_mute = ttk.Button(self, textvariable = self.tv_mute, width = 8, command = self.do_mute)
-		b_mode_select = ttk.Button(self, text = 'Mode Select', command = self.do_mode)
-		b_view_log = ttk.Button(self, text = 'View Log', width = 8, command = self.do_showlog)
-		b_prefs = ttk.Button(self, text = 'Prefs', width = 8, command = self.do_prefs)
-		b_close = ttk.Button(self, text = 'Close', width = 8, command = self.do_close)
-		#b_start = ttk.Button(self, textvariable = self.tv_start, width = 8, command = do_start)
+			 name = 'holdButton', 
+			 textvariable = self.tv_hold_resume, 
+			 width = 8, 
+			 command = self.do_hold)
+		b_scan = ttk.Button(self, 
+			name = 'scanButton', 
+			text = 'Scan', 
+			width = 8, 
+			command = self.do_scan)
+		b_bookmark = ttk.Button(self, 
+			name = 'bookmarkButton', 
+			text = 'Bookmark', 
+			width = 8, 
+			command = self.do_bookmark)
+		b_mute = ttk.Button(self, 
+			name = 'muteButton', 
+			textvariable = self.tv_mute, 
+			width = 8, 
+			command = self.do_mute)
+		b_mode_select = ttk.Button(self, 
+			name = 'modeButton', 
+			text = 'Mode Select', 
+			command = self.do_mode)
+		b_view_log = ttk.Button(self, 
+			name = 'viewLogButton', 
+			text = 'View Log', 
+			width = 8, 
+			command = self.do_showlog)
+		b_prefs = ttk.Button(self, 
+			name = 'prefsButton', 
+			text = 'Prefs', 
+			width = 8, 
+			command = self.do_prefs)
+		b_close = ttk.Button(self, 
+			name = 'closeButton', 
+			text = 'Close', 
+			width = 8, 
+			command = self.do_close)
 
 		# Static labels
 		l_rcv = ttk.Label(self, text = 'Rcv:')
@@ -415,7 +455,7 @@ class Scanmon(ttk.Frame):
 		# Data Display labels
 
 		# l_rcv_ind must be accessible later
-		self.l_rcv_ind = ttk.Label(self, text = '    ', background = '#00e')
+		self.l_rcv_ind = ttk.Label(self, text = '....', background = '#00e')
 		lf_sys = ttk.LabelFrame(self, text = 'System', padding = (5, 0))
 		self.tv_sys = StringVar()
 		l_sys = ttk.Label(lf_sys, textvariable = self.tv_sys, width = 16)
