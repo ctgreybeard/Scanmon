@@ -195,7 +195,7 @@ class Scanmon(ttk.Frame):
 				try:
 					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
 					if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
-						self.send_rcv_ind('#e00')
+						self.send_rcv_ind(False)
 						self.cur_frq = ''
 						self.start_time = None
 					elif resp['FRQ_TGID'] != '':
@@ -205,7 +205,7 @@ class Scanmon(ttk.Frame):
 							self.set_dur(str(int((now_time - self.start_time).total_seconds())))
 						else:
 							self.start_time = now_time
-							self.send_rcv_ind('#0e0')
+							self.send_rcv_ind(True)
 							self.cur_frq = this_frq
 							self.send_sys_disp(
 								frequency = this_frq,
@@ -331,7 +331,10 @@ class Scanmon(ttk.Frame):
 		self.send_cmd('SQL,{}'.format(self.tv_sql.get()))
 	
 	def set_rcv_ind(self, val):
-		self.l_rcv_ind['background'] = val
+		try:
+			self.l_rcv_ind.state([self.imselect[val]])
+		except KeyError:
+			self.logger.exception('Invalid state for l_rcv_ind: %s', val)
 	
 	def cmd_status(self, cmd, status):
 		self.send_cmd(cmd)
@@ -385,7 +388,7 @@ class Scanmon(ttk.Frame):
 	def buildWindow(self):
 		self.master.title('Scanmon - Uniden scanner monitor')
 		self.master.resizable(False, False)
-
+		
 		self.configure(padding = (5, 10))
 		self.grid(column = 0, row = 0, sticky = (N, E, W, S))
 
@@ -454,28 +457,42 @@ class Scanmon(ttk.Frame):
 
 		# Data Display labels
 
+		# Receive indicator images
+		self.im1 = PhotoImage(file='l_rcv_ind.gif')
+		self.im2 = PhotoImage(file='l_rcv_ind_a.gif')
+		self.im3 = PhotoImage(file='l_rcv_ind_i.gif')
+		self.imselect = {True: 'alternate', False: '!alternate'}
+
+		# Define the styles
+		ostyle = ttk.Style()	# Anchor style for configure and map
+		ostyle.configure('TLabelframe', borderwidth = 2, relief = GROOVE, padding = (5, 0))
+		ostyle.configure('Ind.Label', border = 2, relief = GROOVE, background = 'white')
+		ostyle.map('Ind.TLabel', image = (('alternate', self.im2), ('!alternate', self.im3)))
+		
 		# l_rcv_ind must be accessible later
-		self.l_rcv_ind = ttk.Label(self, text = '....', background = '#00e')
-		lf_sys = ttk.LabelFrame(self, text = 'System', padding = (5, 0))
+		self.l_rcv_ind = ttk.Label(self, style = 'Ind.TLabel')
+		self.l_rcv_ind.image = self.im1
+
+		lf_sys = ttk.LabelFrame(self, text = 'System')
 		self.tv_sys = StringVar()
 		l_sys = ttk.Label(lf_sys, textvariable = self.tv_sys, width = 16)
-		lf_grp = ttk.LabelFrame(self, text = 'Group', padding = (5, 0))
+		lf_grp = ttk.LabelFrame(self, text = 'Group')
 		self.tv_grp = StringVar()
 		l_grp = ttk.Label(lf_grp, textvariable = self.tv_grp, width = 16)
-		lf_chn = ttk.LabelFrame(self, text = 'Channel', padding = (5, 0))
+		lf_chn = ttk.LabelFrame(self, text = 'Channel')
 		self.tv_chn = StringVar()
 		l_chn = ttk.Label(lf_chn, textvariable = self.tv_chn, width = 16)
 		c_frq = ttk.Frame(self)
-		lf_frq = ttk.LabelFrame(c_frq, text = 'Freq/TGID', padding = (5, 0))
+		lf_frq = ttk.LabelFrame(c_frq, text = 'Freq/TGID')
 		self.tv_frq = StringVar()
 		l_frq = ttk.Label(lf_frq, textvariable = self.tv_frq, width = 10, anchor = E)
 		#l_mhz = ttk.Label(c_frq, text = 'MHz')
 		c_dur = ttk.Frame(self)
-		lf_dur = ttk.LabelFrame(c_dur, text = 'Duration', padding = (5, 0))
+		lf_dur = ttk.LabelFrame(c_dur, text = 'Duration')
 		self.tv_dur = StringVar()
 		l_dur = ttk.Label(lf_dur, textvariable = self.tv_dur, width = 10, anchor = E)
 		l_secs = ttk.Label(c_dur, text = 'Secs')
-		lf_time = ttk.LabelFrame(self, text = 'Start Time', padding = (5, 0))
+		lf_time = ttk.LabelFrame(self, text = 'Start Time')
 		self.tv_time = StringVar()
 		l_time = ttk.Label(lf_time, textvariable = self.tv_time, width = 16, anchor = E)
 		lf_status = ttk.LabelFrame(self, text = 'Status')
