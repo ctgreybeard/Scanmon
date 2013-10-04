@@ -7,7 +7,7 @@ import re, types, time, sys, logging, itertools
 from logging.handlers import SysLogHandler
 from datetime import datetime
 from scanner import Scanner, Decode
-from tkinter import *
+import tkinter as tk
 from tkinter import ttk
 from threading import Thread, Barrier
 from queue import Queue, Empty
@@ -390,13 +390,13 @@ class Scanmon(ttk.Frame):
 		self.master.resizable(False, False)
 		
 		self.configure(padding = (5, 10))
-		self.grid(column = 0, row = 0, sticky = (N, E, W, S))
+		self.grid(column = 0, row = 0, sticky = (tk.N, tk.E, tk.W, tk.S))
 
 		# Text variables used below
-		self.tv_hold_resume = StringVar(value = 'Hold')
-		self.tv_mute = StringVar(value = 'Mute')
-		#tv_start = StringVar(value = 'Start')
-		self.tv_status = StringVar()
+		self.tv_hold_resume = tk.StringVar(value = 'Hold')
+		self.tv_mute = tk.StringVar(value = 'Mute')
+		#tv_start = tk.StringVar(value = 'Start')
+		self.tv_status = tk.StringVar()
 
 		# Define the buttons
 
@@ -458,48 +458,66 @@ class Scanmon(ttk.Frame):
 		# Data Display labels
 
 		# Receive indicator images
-		self.im1 = PhotoImage(file='l_rcv_ind.gif')
-		self.im2 = PhotoImage(file='l_rcv_ind_a.gif')
-		self.im3 = PhotoImage(file='l_rcv_ind_i.gif')
-		self.imselect = {True: 'alternate', False: '!alternate'}
+		imd = '''#define l_rcv_ind_r_width 18
+		#define l_rcv_ind_r_height 18
+		static unsigned char l_rcv_ind_r_bits[] = {
+		   0xe0, 0x1f, 0x00, 0xf8, 0x7f, 0x00, 0xfc, 0xff, 0x00, 0xfe, 0xff, 0x01,
+		   0xfe, 0xff, 0x01, 0xff, 0xff, 0x03, 0xff, 0xff, 0x03, 0xff, 0xff, 0x03,
+		   0xff, 0xff, 0x03, 0xff, 0xff, 0x03, 0xff, 0xff, 0x03, 0xff, 0xff, 0x03,
+		   0xff, 0xff, 0x03, 0xfe, 0xff, 0x01, 0xfe, 0xff, 0x01, 0xfc, 0xff, 0x00,
+		   0xf8, 0x7f, 0x00, 0xe0, 0x1f, 0x00 };'''
 
 		# Define the styles
 		ostyle = ttk.Style()	# Anchor style for configure and map
-		ostyle.configure('TLabelframe', borderwidth = 2, relief = GROOVE, padding = (5, 0))
-		ostyle.configure('Ind.Label', border = 2, relief = GROOVE, background = 'white')
-		ostyle.map('Ind.TLabel', image = (('alternate', self.im2), ('!alternate', self.im3)))
+		ostyle.configure('TLabelframe', borderwidth = 3, relief = tk.GROOVE, padding = (5, 0))
+		ostyle.configure('Ind.Label', 
+			border = 2, 
+			relief = tk.GROOVE)
 		
+		imd_b = tk.BitmapImage(data = imd, 
+			background = ostyle.lookup('Ind.TLabel', 'background'),	# Background same as Label
+			foreground = '#00e')	# Blue
+		imd_r = tk.BitmapImage(data = imd, 
+			background = ostyle.lookup('Ind.TLabel', 'background'), 
+			foreground = '#e00')	# Red
+		imd_g = tk.BitmapImage(data = imd, 
+			background = ostyle.lookup('Ind.TLabel', 'background'), 
+			foreground = '#0e0')	# Green
+		self.images = (imd_b, imd_r, imd_g)	# Need a persistent reference or it breaks
+		self.imselect = {True: 'alternate', False: '!alternate'}
+		ostyle.map('Ind.TLabel', image = (('alternate', imd_g), ('!alternate', imd_r)))
+
 		# l_rcv_ind must be accessible later
 		self.l_rcv_ind = ttk.Label(self, style = 'Ind.TLabel')
-		self.l_rcv_ind.image = self.im1
+		self.l_rcv_ind.image = imd_b
 
 		lf_sys = ttk.LabelFrame(self, text = 'System')
-		self.tv_sys = StringVar()
+		self.tv_sys = tk.StringVar()
 		l_sys = ttk.Label(lf_sys, textvariable = self.tv_sys, width = 16)
 		lf_grp = ttk.LabelFrame(self, text = 'Group')
-		self.tv_grp = StringVar()
+		self.tv_grp = tk.StringVar()
 		l_grp = ttk.Label(lf_grp, textvariable = self.tv_grp, width = 16)
 		lf_chn = ttk.LabelFrame(self, text = 'Channel')
-		self.tv_chn = StringVar()
+		self.tv_chn = tk.StringVar()
 		l_chn = ttk.Label(lf_chn, textvariable = self.tv_chn, width = 16)
 		c_frq = ttk.Frame(self)
 		lf_frq = ttk.LabelFrame(c_frq, text = 'Freq/TGID')
-		self.tv_frq = StringVar()
-		l_frq = ttk.Label(lf_frq, textvariable = self.tv_frq, width = 10, anchor = E)
+		self.tv_frq = tk.StringVar()
+		l_frq = ttk.Label(lf_frq, textvariable = self.tv_frq, width = 10, anchor = tk.E)
 		#l_mhz = ttk.Label(c_frq, text = 'MHz')
 		c_dur = ttk.Frame(self)
 		lf_dur = ttk.LabelFrame(c_dur, text = 'Duration')
-		self.tv_dur = StringVar()
-		l_dur = ttk.Label(lf_dur, textvariable = self.tv_dur, width = 10, anchor = E)
+		self.tv_dur = tk.StringVar()
+		l_dur = ttk.Label(lf_dur, textvariable = self.tv_dur, width = 10, anchor = tk.E)
 		l_secs = ttk.Label(c_dur, text = 'Secs')
 		lf_time = ttk.LabelFrame(self, text = 'Start Time')
-		self.tv_time = StringVar()
-		l_time = ttk.Label(lf_time, textvariable = self.tv_time, width = 16, anchor = E)
+		self.tv_time = tk.StringVar()
+		l_time = ttk.Label(lf_time, textvariable = self.tv_time, width = 16, anchor = tk.E)
 		lf_status = ttk.LabelFrame(self, text = 'Status')
 		l_status = ttk.Label(lf_status, textvariable = self.tv_status)
-		self.tv_model = StringVar()
+		self.tv_model = tk.StringVar()
 		l_model = ttk.Label(self, textvariable = self.tv_model)
-		self.tv_version = StringVar()
+		self.tv_version = tk.StringVar()
 		l_version = ttk.Label(self, textvariable = self.tv_version)
 
 		# Grid the labels into the frames
@@ -511,13 +529,13 @@ class Scanmon(ttk.Frame):
 		l_time.grid(column = 0, row = 0)
 
 		# The spinboxes
-		self.tv_vol = StringVar()
-		s_vol = Spinbox(self, from_ = 0, to = 29, increment = 1, 
-			justify = RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
+		self.tv_vol = tk.StringVar()
+		s_vol = tk.Spinbox(self, from_ = 0, to = 29, increment = 1, 
+			justify = tk.RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
 			state = 'readonly', textvariable = self.tv_vol, command = self.set_vol)
-		self.tv_sql = StringVar()
-		s_sql = Spinbox(self, from_ = 0, to = 19, increment = 1, 
-			justify = RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
+		self.tv_sql = tk.StringVar()
+		s_sql = tk.Spinbox(self, from_ = 0, to = 19, increment = 1, 
+			justify = tk.RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
 			state = 'readonly', textvariable = self.tv_sql, command = self.set_sql)
 
 		# Grid the rest into the Frame
@@ -527,31 +545,31 @@ class Scanmon(ttk.Frame):
 		b_scan.grid(column = 2, row = 3, columnspan = 2, rowspan = 2)
 		b_bookmark.grid(column = 0, row = 5, columnspan = 2, rowspan = 2)
 		b_mute.grid(column = 2, row = 5, columnspan = 2, rowspan = 2)
-		l_vol.grid(column = 0, row = 7, columnspan = 1, sticky = E)
-		s_vol.grid(column = 1, row = 7, columnspan = 1, sticky = W)
-		l_sql.grid(column = 2, row = 7, columnspan = 1, sticky = E)
-		s_sql.grid(column = 3, row = 7, columnspan = 1, sticky = W)
+		l_vol.grid(column = 0, row = 7, columnspan = 1, sticky = tk.E)
+		s_vol.grid(column = 1, row = 7, columnspan = 1, sticky = tk.W)
+		l_sql.grid(column = 2, row = 7, columnspan = 1, sticky = tk.E)
+		s_sql.grid(column = 3, row = 7, columnspan = 1, sticky = tk.W)
 		b_mode_select.grid(column = 0, row = 8, columnspan = 2)
 		b_view_log.grid(column = 2, row = 8, columnspan = 2)
-		b_prefs.grid(column = 5, row = 8, sticky = W)
-		b_close.grid(column = 6, row = 8, sticky = W)
-		l_rcv.grid(column = 4, row = 0, columnspan = 1, sticky = E)
-		self.l_rcv_ind.grid(column = 5, row = 0, columnspan = 1, sticky = W)
-		lf_sys.grid(column = 5, row = 1, columnspan = 2, sticky = W)
-		lf_grp.grid(column = 5, row = 2, columnspan = 2, sticky = W)
-		lf_chn.grid(column = 5, row = 3, columnspan = 2, sticky = W)
-		c_frq.grid(column = 5, row = 4, columnspan = 2, sticky = W)
+		b_prefs.grid(column = 5, row = 8, sticky = tk.W)
+		b_close.grid(column = 6, row = 8, sticky = tk.W)
+		l_rcv.grid(column = 4, row = 0, columnspan = 1, sticky = tk.E)
+		self.l_rcv_ind.grid(column = 5, row = 0, columnspan = 1, sticky = tk.W)
+		lf_sys.grid(column = 5, row = 1, columnspan = 2, sticky = tk.W)
+		lf_grp.grid(column = 5, row = 2, columnspan = 2, sticky = tk.W)
+		lf_chn.grid(column = 5, row = 3, columnspan = 2, sticky = tk.W)
+		c_frq.grid(column = 5, row = 4, columnspan = 2, sticky = tk.W)
 		lf_frq.grid(column = 0, row = 0)
-		#l_mhz.grid(column = 1, row = 0, sticky = (W, S))
-		c_dur.grid(column = 5, row = 5, sticky = W)
+		#l_mhz.grid(column = 1, row = 0, sticky = (tk.W, tk.S))
+		c_dur.grid(column = 5, row = 5, sticky = tk.W)
 		lf_dur.grid(column = 0, row = 0)
-		l_secs.grid(column = 1, row = 0, sticky = (W, S))
-		lf_time.grid(column = 5, row = 6, columnspan = 2, sticky = W)
+		l_secs.grid(column = 1, row = 0, sticky = (tk.W, tk.S))
+		lf_time.grid(column = 5, row = 6, columnspan = 2, sticky = tk.W)
 		#b_start.grid(column = 5, row = 8, rowspan = 2)
-		lf_status.grid(column = 0, row = 10, columnspan = 7, sticky = EW)
-		l_status.grid(column = 0, row = 0, sticky = EW)
-		l_model.grid(column = 0, row = 11, sticky = E, columnspan = 4)
-		l_version.grid(column = 5, row = 11, sticky = W, columnspan = 2)
+		lf_status.grid(column = 0, row = 10, columnspan = 7, sticky = tk.EW)
+		l_status.grid(column = 0, row = 0, sticky = tk.EW)
+		l_model.grid(column = 0, row = 11, sticky = tk.E, columnspan = 4)
+		l_version.grid(column = 5, row = 11, sticky = tk.W, columnspan = 2)
 
 		self.rowconfigure(7, pad=10)
 		self.rowconfigure(8, pad=10)
