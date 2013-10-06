@@ -209,9 +209,9 @@ class Scanmon(ttk.Frame):
 			while self.monitor_running:
 				resp = self.send_cmd('GLG')
 				try:
-					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', 
-						resp['FRQ_TGID'], 
-						resp['MUT'], 
+					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s',
+						resp['FRQ_TGID'],
+						resp['MUT'],
 						resp['SQL'])
 					if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
 						self.send_rcv_ind(False)
@@ -318,10 +318,11 @@ class Scanmon(ttk.Frame):
 
 		self.to_mon_queue = Queue()
 		self.from_mon_queue = Queue()
-		
+
 		# Hit Logging info
 		self.hitLogWin = None
-		self.hitLog = {}
+		self.summaryHitLog = {}
+		self.detailHitLog = []
 
 		self.buildWindow()
 
@@ -409,38 +410,45 @@ class Scanmon(ttk.Frame):
 
 	def do_mode(self):
 		self.set_status('Commanded to Mode')
-	
+
 	def logHit(self, desc):
+
+		# Push it to the detail log
+		self.detailHitLog.append(desc)
+
+		desc = copy.copy(desc)		# Another copy for Summary
 		desckey = desc.key
 
-		if self.hitLogWin is None or not self.hitLogWin.winfo_exists():	# Keep our own internal list
-			if desckey in self.hitLog:	# We have one of these
-				action = 'Bump'
-				self.hitLog[desckey].bumpCount(desc.duration)
-			else:
-				action = 'Insert'
-				self.hitLog[desckey] = desc
+		if desckey in self.summaryHitLog:	# We have one of these
+			action = 'Bump'
+			self.summaryHitLog[desckey].bumpCount(desc.duration)
 		else:
-			action = 'Add'
-			self.hitLog[desckey] = self.hitLogWin.add(desc)
+			action = 'Insert'
+			self.summaryHitLog[desckey] = desc
+
+		if self.hitLogWin and self.hitLogWin.winfo_exists():
+			self.logger.debug('ScanMon.logHit: Sending refresh')
+			self.hitLogWin.refresh()
+		else:
+			self.logger.debug('ScanMon.logHit: Refresh delayed')
 
 		self.logger.debug('ScanMon.logHit: %s %s, count=%s, dur=%s, last=%s',
 			action,
 			desckey,
-			self.hitLog[desckey].count,
-			self.hitLog[desckey].duration,
-			self.hitLog[desckey].last)
+			self.summaryHitLog[desckey].count,
+			self.summaryHitLog[desckey].duration,
+			self.summaryHitLog[desckey].last)
 
 	def do_showlog(self):
 		'''Create the hitLogWin if it's not already up'''
-		
+
 		if self.hitLogWin is None or not self.hitLogWin.winfo_exists():
 			self.logger.debug('ScanMon.do_showlog: New LogWin')
-			self.hitLogWin = LogWin(logger = self.logwinLogger)
+			self.hitLogWin = LogWin(
+				summaryArray = self.summaryHitLog,
+				detailArray = self.detailHitLog,
+				logger = self.logwinLogger)
 			self.hitLogWin.winfo_toplevel().title('Scanmon - Hit Log')
-			for desc in list(self.hitLog.values()):
-				self.hitLog[desc.key] = self.hitLogWin.add(desc)
-			self.winfo_toplevel().lift()
 		else:	# Print info about the window. Is it still active?
 			self.logger.debug('MainWin.doGo: LogWin exists {}'.format(self.logWin.winfo_exists()))
 
