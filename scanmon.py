@@ -3,24 +3,28 @@
 Scanner monitor - Shows scanner activity in a window with some controls
 '''
 
+# System modules
 import re, types, time, sys, logging, itertools
 from logging.handlers import SysLogHandler
 from datetime import datetime
-from scanner import Scanner, Decode
 import tkinter as tk
 from tkinter import ttk
 from threading import Thread, Barrier
 from queue import Queue, Empty
+
+# Our modules
+from scanner import Scanner, Decode
+from logwin import *
 
 class Scanmon(ttk.Frame):
 
 	logName = 'scanmon'
 	logLevel = logging.DEBUG
 	logLevel = logging.WARNING
-	
+
 	class MonitorRequest:
-	
-		REQUESTS = {	
+
+		REQUESTS = {
 			# 1-99 to Monitor
 			'CMD': 1,	# Send scanner command ->Monitor
 			'MCMD': 2,	# Multi-command request
@@ -29,7 +33,7 @@ class Scanmon(ttk.Frame):
 			'CALLBACK' : 201,
 			'SETSYSDISP': 206, 	# Set received system display
 		}
-	
+
 		def __init__(self, req_type, message, rpc = None, response = None, callback = None, **kw):
 			self.req_type = req_type
 			self.orig_type = None
@@ -38,12 +42,18 @@ class Scanmon(ttk.Frame):
 			self.rpc = rpc
 			self.message = message
 			self.kw = kw
-		
+
 		def __str__(self):
-			return 'Type:{}, message={}, kw={}, orig_type={}, response={}, callback={}'.format(self.req_type, self.message, self.kw, self.orig_type, self.response, self.callback)
+			return 'Type:{}, message={}, kw={}, orig_type={}, response={}, callback={}'.format(
+				self.req_type,
+				self.message,
+				self.kw,
+				self.orig_type,
+				self.response,
+				self.callback)
 
 	# END class MonitorRequest
-	
+
 	class Monitor(Thread):
 
 		def __init__(self, mainwin, scanner, my_queue, their_queue, barrier, *args, **kw):
@@ -73,7 +83,7 @@ class Scanmon(ttk.Frame):
 			self.barrier = barrier
 			self.drainMax = 3	# Max drain count
 			self.drainCount = 0
-	
+
 		def queue_message(self, type, message, rpc = None, request = None, **kw):
 			if request is None:		# No current request, make a new one
 				request = Scanmon.MonitorRequest(type, message, rpc = rpc, **kw)
@@ -82,13 +92,18 @@ class Scanmon(ttk.Frame):
 				request.req_type = type
 				request.message = message
 				request.kw = kw
-			
+
 			self.logger.debug('Queueing msg: %s', str(request))
 			self.their_queue.put(request)
-		
+
 		def send_status(self, status):
 			self.logger.info('Set Status: %s', status)
 			self.queue_message(Scanmon.MonitorRequest.REQUESTS['RPC'], status, rpc = self.mainwin.set_status)
+
+		def send_hit(self, desc):
+			'''Send hit descriptor'''
+			self.logger.info('Send hit: %s', desc)
+			self.queue_message(Scanmon.MonitorRequest.REQUESTS['RPC'], desc, rpc = self.mainwin.logHit)
 
 		def set_it(self, it, val):
 			self.logger.debug('set_it: it={}, val={}'.format(it, val))
@@ -123,7 +138,7 @@ class Scanmon(ttk.Frame):
 					aval = int(resp[var])	# Actual Value
 					self.logger.debug('Check spin: cmd=%s, aval=%s tv=%s', cmd, aval, tv)
 					self.set_it(tv, aval)
-				except: 
+				except:
 					pass
 
 		def check_vol(self):
@@ -148,14 +163,14 @@ class Scanmon(ttk.Frame):
 			self.logger.debug('Sending command: %s', cmd)
 			resp = self.scanner.cmd(cmd, Scanner.DECODED)
 			if resp['iserror']:
-				self.logger.error('%s command failed: %s, %s', 
-					cmd, 
-					Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]], 
+				self.logger.error('%s command failed: %s, %s',
+					cmd,
+					Decode.ERRORMSG[resp[Decode.ERRORCODEKEY]],
 					str(resp))
-			if request is not None: 
+			if request is not None:
 				request.response = resp
 			return resp
-		
+
 		# Drain is only used when there may be a big problem
 		def drain(self):
 			self.drainCount += 1
@@ -166,7 +181,7 @@ class Scanmon(ttk.Frame):
 				self.send_status('Draining at {}'.format(datetime.today().strftime('%m/%d/%y %H:%M:%S')))
 				self.scanner.drain()
 				self.logger.warning('Drained')
-	
+
 		def do_message(self, message):
 			if not isinstance(message, Scanmon.MonitorRequest):
 				self.logger.critical('Non-MonitorRequest received')
@@ -179,7 +194,7 @@ class Scanmon(ttk.Frame):
 				message.rpc(message.message)
 
 		def run(self):	# Overrides the default Thread run (which does nothing)
-	
+
 			self.start_time = None
 			self.now_time = datetime.today()
 			self.cur_frq = ''
@@ -189,21 +204,40 @@ class Scanmon(ttk.Frame):
 			# Start the status monitor running
 			self.status_checks = itertools.cycle((self.check_vol, self.check_sql, self.check_hold))
 			self.barrier.wait()
+			self.currHit = None
 
 			while self.monitor_running:
 				resp = self.send_cmd('GLG')
 				try:
-					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', resp['FRQ_TGID'], resp['MUT'], resp['SQL'])
+					self.logger.debug('Got GLG: FRQ=%s, MUT=%s, SQL=%s', 
+						resp['FRQ_TGID'], 
+						resp['MUT'], 
+						resp['SQL'])
 					if resp['SQL'] == '' or resp['SQL'] == '0':	# We aren't receiving anything
 						self.send_rcv_ind(False)
 						self.cur_frq = ''
 						self.start_time = None
+						if self.currHit is not None:
+							self.send_hit(self.currHit)
+							self.currHit = None
 					elif resp['FRQ_TGID'] != '':
 						now_time = datetime.today()	# Capture the moment
 						this_frq = eval(resp['FRQ_TGID'])
 						if self.cur_frq == this_frq:	# Same frequency
-							self.set_dur(str(int((now_time - self.start_time).total_seconds())))
+							dur = int((now_time - self.start_time).total_seconds())
+							self.set_dur(str(dur))
+							if self.currHit is not None:
+								self.currHit.duration = dur
 						else:
+							if self.currHit is not None:
+								self.send_hit(self.currHit)
+							self.currHit = HitDesc(
+								freq = str(this_frq),
+								system = resp['NAME1'],
+								group = resp['NAME2'],
+								channel = resp['NAME3'],
+								duration = 0,
+								logger = self.logger)
 							self.start_time = now_time
 							self.send_rcv_ind(True)
 							self.cur_frq = this_frq
@@ -215,13 +249,13 @@ class Scanmon(ttk.Frame):
 								duration = '0',
 								starttime = now_time.strftime('%m/%d/%y %H:%M:%S'))
 							self.set_dur('0')
-					else: 
+					else:
 						self.send_status('No SQL and no FRQ/TGID??')
 				except KeyError:
 					self.logger.error('Bad response from GLG: %s', str(resp))
 					self.send_status('Bad response from GLG')
 					self.drain()
-				
+
 				# Do one status check - Weird syntax is correct
 				self.status_checks.__next__()()
 
@@ -230,7 +264,7 @@ class Scanmon(ttk.Frame):
 						self.do_message(self.my_queue.get(block = False))
 				except Empty:
 					pass
-				
+
 				# Finally, wait a bit to lessen the load
 				time.sleep(0.2)
 
@@ -239,10 +273,10 @@ class Scanmon(ttk.Frame):
 			self.monitor_running = False
 
 	# END class Monitor
-	
+
 	def __init__(self, master = None):
 		ttk.Frame.__init__(self, master, class_ = 'Scanmon')
-		
+
 		self.scanner = Scanner(logname = Scanmon.logName + '.scanner')
 		if not self.scanner.isOpen():
 			assert self.scanner.discover(), 'Unable to acquire scanner'
@@ -253,9 +287,10 @@ class Scanmon(ttk.Frame):
 		self.oVol = '0'
 		self.a_status = ['', '', '']
 
-		# create logger
+		# create loggers
 		self.logger = logging.getLogger(Scanmon.logName)
 		self.logger.setLevel(Scanmon.logLevel)
+		self.logwinLogger = logging.getLogger(Scanmon.logName + '.LogWin')
 
 		# Create console handler and set level
 		ch = logging.StreamHandler(stream = sys.stderr)
@@ -278,14 +313,18 @@ class Scanmon(ttk.Frame):
 
 		self.logger.addHandler(ch)
 		self.logger.addHandler(slh)
-		
+
 		# Setup queues
 
 		self.to_mon_queue = Queue()
 		self.from_mon_queue = Queue()
 		
+		# Hit Logging info
+		self.hitLogWin = None
+		self.hitLog = {}
+
 		self.buildWindow()
-		
+
 	def destroy(self):
 		ttk.Frame.destroy(self)
 		self.master.destroy()
@@ -329,13 +368,13 @@ class Scanmon(ttk.Frame):
 
 	def set_sql(self):
 		self.send_cmd('SQL,{}'.format(self.tv_sql.get()))
-	
+
 	def set_rcv_ind(self, val):
 		try:
 			self.l_rcv_ind.state([self.imselect[val]])
 		except KeyError:
 			self.logger.exception('Invalid state for l_rcv_ind: %s', val)
-	
+
 	def cmd_status(self, cmd, status):
 		self.send_cmd(cmd)
 		self.set_status(status)
@@ -370,9 +409,40 @@ class Scanmon(ttk.Frame):
 
 	def do_mode(self):
 		self.set_status('Commanded to Mode')
+	
+	def logHit(self, desc):
+		desckey = desc.key
+
+		if self.hitLogWin is None or not self.hitLogWin.winfo_exists():	# Keep our own internal list
+			if desckey in self.hitLog:	# We have one of these
+				action = 'Bump'
+				self.hitLog[desckey].bumpCount(desc.duration)
+			else:
+				action = 'Insert'
+				self.hitLog[desckey] = desc
+		else:
+			action = 'Add'
+			self.hitLog[desckey] = self.hitLogWin.add(desc)
+
+		self.logger.debug('ScanMon.logHit: %s %s, count=%s, dur=%s, last=%s',
+			action,
+			desckey,
+			self.hitLog[desckey].count,
+			self.hitLog[desckey].duration,
+			self.hitLog[desckey].last)
 
 	def do_showlog(self):
-		self.set_status('Commanded to Show Log')
+		'''Create the hitLogWin if it's not already up'''
+		
+		if self.hitLogWin is None or not self.hitLogWin.winfo_exists():
+			self.logger.debug('ScanMon.do_showlog: New LogWin')
+			self.hitLogWin = LogWin(logger = self.logwinLogger)
+			self.hitLogWin.winfo_toplevel().title('Scanmon - Hit Log')
+			for desc in list(self.hitLog.values()):
+				self.hitLog[desc.key] = self.hitLogWin.add(desc)
+			self.winfo_toplevel().lift()
+		else:	# Print info about the window. Is it still active?
+			self.logger.debug('MainWin.doGo: LogWin exists {}'.format(self.logWin.winfo_exists()))
 
 	def do_prefs(self):
 		self.set_status('Commanded to Prefs')
@@ -386,9 +456,9 @@ class Scanmon(ttk.Frame):
 	# Set up logging (based on Logging tutorial (file:///Users/dad/Dropbox/Documents/Python/python-3.3.2-docs-html/howto/logging.html#logging-basic-tutorial)
 
 	def buildWindow(self):
-		self.master.title('Scanmon - Uniden scanner monitor')
+		self.winfo_toplevel().title('Scanmon - Uniden scanner monitor')
 		self.master.resizable(False, False)
-		
+
 		self.configure(padding = (5, 10))
 		self.grid(column = 0, row = 0, sticky = (tk.N, tk.E, tk.W, tk.S))
 
@@ -400,54 +470,54 @@ class Scanmon(ttk.Frame):
 
 		# Define the buttons
 
-		b_lockout = ttk.Button(self, 
-			name = 'lockoutButton', 
-			text = 'Lockout', 
-			width = 8, 
+		b_lockout = ttk.Button(self,
+			name = 'lockoutButton',
+			text = 'Lockout',
+			width = 8,
 			command = self.do_lockout)
-		b_skip = ttk.Button(self, 
-			name = 'skipButton', 
-			text = 'Skip', 
-			width = 8, 
+		b_skip = ttk.Button(self,
+			name = 'skipButton',
+			text = 'Skip',
+			width = 8,
 			command = self.do_skip)
-		b_hold_resume = ttk.Button(self, 
-			 name = 'holdButton', 
-			 textvariable = self.tv_hold_resume, 
-			 width = 8, 
+		b_hold_resume = ttk.Button(self,
+			 name = 'holdButton',
+			 textvariable = self.tv_hold_resume,
+			 width = 8,
 			 command = self.do_hold)
-		b_scan = ttk.Button(self, 
-			name = 'scanButton', 
-			text = 'Scan', 
-			width = 8, 
+		b_scan = ttk.Button(self,
+			name = 'scanButton',
+			text = 'Scan',
+			width = 8,
 			command = self.do_scan)
-		b_bookmark = ttk.Button(self, 
-			name = 'bookmarkButton', 
-			text = 'Bookmark', 
-			width = 8, 
+		b_bookmark = ttk.Button(self,
+			name = 'bookmarkButton',
+			text = 'Bookmark',
+			width = 8,
 			command = self.do_bookmark)
-		b_mute = ttk.Button(self, 
-			name = 'muteButton', 
-			textvariable = self.tv_mute, 
-			width = 8, 
+		b_mute = ttk.Button(self,
+			name = 'muteButton',
+			textvariable = self.tv_mute,
+			width = 8,
 			command = self.do_mute)
-		b_mode_select = ttk.Button(self, 
-			name = 'modeButton', 
-			text = 'Mode Select', 
+		b_mode_select = ttk.Button(self,
+			name = 'modeButton',
+			text = 'Mode Select',
 			command = self.do_mode)
-		b_view_log = ttk.Button(self, 
-			name = 'viewLogButton', 
-			text = 'View Log', 
-			width = 8, 
+		b_view_log = ttk.Button(self,
+			name = 'viewLogButton',
+			text = 'View Log',
+			width = 8,
 			command = self.do_showlog)
-		b_prefs = ttk.Button(self, 
-			name = 'prefsButton', 
-			text = 'Prefs', 
-			width = 8, 
+		b_prefs = ttk.Button(self,
+			name = 'prefsButton',
+			text = 'Prefs',
+			width = 8,
 			command = self.do_prefs)
-		b_close = ttk.Button(self, 
-			name = 'closeButton', 
-			text = 'Close', 
-			width = 8, 
+		b_close = ttk.Button(self,
+			name = 'closeButton',
+			text = 'Close',
+			width = 8,
 			command = self.do_close)
 
 		# Static labels
@@ -470,18 +540,18 @@ class Scanmon(ttk.Frame):
 		# Define the styles
 		ostyle = ttk.Style()	# Anchor style for configure and map
 		ostyle.configure('TLabelframe', borderwidth = 3, relief = tk.GROOVE, padding = (5, 0))
-		ostyle.configure('Ind.Label', 
-			border = 2, 
+		ostyle.configure('Ind.Label',
+			border = 2,
 			relief = tk.GROOVE)
-		
-		imd_b = tk.BitmapImage(data = imd, 
+
+		imd_b = tk.BitmapImage(data = imd,
 			background = ostyle.lookup('Ind.TLabel', 'background'),	# Background same as Label
 			foreground = '#00e')	# Blue
-		imd_r = tk.BitmapImage(data = imd, 
-			background = ostyle.lookup('Ind.TLabel', 'background'), 
+		imd_r = tk.BitmapImage(data = imd,
+			background = ostyle.lookup('Ind.TLabel', 'background'),
 			foreground = '#e00')	# Red
-		imd_g = tk.BitmapImage(data = imd, 
-			background = ostyle.lookup('Ind.TLabel', 'background'), 
+		imd_g = tk.BitmapImage(data = imd,
+			background = ostyle.lookup('Ind.TLabel', 'background'),
 			foreground = '#0e0')	# Green
 		self.images = (imd_b, imd_r, imd_g)	# Need a persistent reference or it breaks
 		self.imselect = {True: 'alternate', False: '!alternate'}
@@ -530,11 +600,11 @@ class Scanmon(ttk.Frame):
 
 		# The spinboxes
 		self.tv_vol = tk.StringVar()
-		s_vol = tk.Spinbox(self, from_ = 0, to = 29, increment = 1, 
+		s_vol = tk.Spinbox(self, from_ = 0, to = 29, increment = 1,
 			justify = tk.RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
 			state = 'readonly', textvariable = self.tv_vol, command = self.set_vol)
 		self.tv_sql = tk.StringVar()
-		s_sql = tk.Spinbox(self, from_ = 0, to = 19, increment = 1, 
+		s_sql = tk.Spinbox(self, from_ = 0, to = 19, increment = 1,
 			justify = tk.RIGHT, width = 4, repeatdelay = 6000, repeatinterval = 1000,
 			state = 'readonly', textvariable = self.tv_sql, command = self.set_sql)
 
@@ -576,13 +646,13 @@ class Scanmon(ttk.Frame):
 		self.rowconfigure(9, pad=10)
 
 		self.set_status('Ready!')
-		
+
 		# END buildWindow
 
 	# Start it all up!
-	
+
 	def runit(self):
-	
+
 		barrier = Barrier(2, timeout = 10)
 
 		self.thr_monitor = Scanmon.Monitor(
@@ -597,8 +667,8 @@ class Scanmon(ttk.Frame):
 
 		self.tv_model.set('Model {}'.format(self.thr_monitor.scanner.MDL))
 		self.tv_version.set(self.thr_monitor.scanner.VER)
-		self.logger.info('Scanner Model: %s, Version: %s', 
-			self.thr_monitor.scanner.MDL, 
+		self.logger.info('Scanner Model: %s, Version: %s',
+			self.thr_monitor.scanner.MDL,
 			self.thr_monitor.scanner.VER)
 
 		try:
@@ -617,7 +687,7 @@ class Scanmon(ttk.Frame):
 			self.logger.critical('Failed', exc_info = dumpit)
 			self.do_close()
 			self.quit()
-			
+
 # END class Scanmon
 
 if __name__ == '__main__':

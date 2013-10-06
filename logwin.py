@@ -210,6 +210,8 @@ class LogWin(tk.Toplevel):
 		self.master.columnconfigure(0, weight = 1)
 		self.master.rowconfigure(0, weight = 1)
 
+		self.winfo_toplevel().resizable(width = False, height = True)
+
 		self.columnconfigure(0, weight = 1)
 		self.columnconfigure(1, weight = 0)
 		self.rowconfigure(0, weight = 0)
@@ -256,7 +258,7 @@ class LogWin(tk.Toplevel):
 		labelSys = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'System', width = LogWin.WIDTHSYS)
 		labelGrp = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Group', width = LogWin.WIDTHGRP)
 		labelChn = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Channel', width = LogWin.WIDTHCHN)
-		labelFrq = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Freq', width = LogWin.WIDTHFRQ)
+		labelFrq = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Freq/TGID', width = LogWin.WIDTHFRQ)
 		labelDur = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Dur', width = LogWin.WIDTHDUR)
 		labelCnt = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Cnt', width = LogWin.WIDTHCNT)
 		labelLst = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Last', width = LogWin.WIDTHLST)
@@ -288,6 +290,7 @@ class LogWin(tk.Toplevel):
 		
 		if self.logger:
 			self.logger.debug('LogWin.add: Adding %s', desc.key)
+			desc.logger = self.logger	# You belong to us now
 
 		if desc.key in self.rowData:	# We already have one of these ...
 			if self.logger:
@@ -343,6 +346,7 @@ if __name__ == '__main__':
 
 			self.master.columnconfigure(0, weight = 1)
 			self.master.rowconfigure(0, weight = 1)
+			self.winfo_toplevel().title('Test LogWin class')
 
 			self.columnconfigure(0, weight = 1)
 			self.columnconfigure(1, weight = 1)
@@ -378,11 +382,11 @@ if __name__ == '__main__':
 			if self.logWin is None or not self.logWin.winfo_exists():
 				self.logger.debug('MainWin.doGo: New LogWin')
 				self.logWin = LogWin(logger = self.logger)
+				self.logWin.title('Test Logging Display')
 				for ndesc in list(self.dataDescs.values()):
 					self.dataDescs[ndesc.key] = self.logWin.add(ndesc)
-				self.lift(aboveThis = self.logWin)
+				self.winfo_toplevel().lift()
 			else:	# Print info about the window. Is it still active?
-				pass
 				self.logger.debug('MainWin.doGo: LogWin exists {}'.format(self.logWin.winfo_exists()))
 
 		def doAdd(self):
