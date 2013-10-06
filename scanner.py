@@ -27,10 +27,10 @@ class Decode:
 	'''
 	Decode cmd results
 	'''
-	
+
 	ISERRORKEY = 'iserror'
 	ERRORCODEKEY = 'errorcode'
-	
+
 	# Some error codes and their descriptions
 	NO_ERROR = 0
 	ERR_PREMATCH = 1
@@ -38,7 +38,7 @@ class Decode:
 	ERR_NOMATCH = 3
 	ERR_RESPONSE = 4
 	ERR_UNKNOWN_RESPONSE = 5
-	
+
 	ERRORMSG = {
 		ERR_PREMATCH: 'Error in prematch',
 		ERR_NOKEYWORDS: 'No keywords',
@@ -46,11 +46,11 @@ class Decode:
 		ERR_RESPONSE: 'Error response from scanner',
 		ERR_UNKNOWN_RESPONSE: 'Unknown response from scanner'
 	}
-	
+
 	# Results processing functions
 	def stspost(basedict):
 		basedict['stspost'] = 'Done'	# Just for testing ...
-	
+
 	# Define decoding re's and methods for cmd results
 	Decodes = {
 		'STS': {	# STS is hard, it's variable in length
@@ -62,7 +62,7 @@ class Decode:
 						_lineno(line),
 						'_CHAR>[^,]{,16}),(?P<L',
 						_lineno(line),
-						'_MODE>[^,]{,16}),')), 
+						'_MODE>[^,]{,16}),')),
 					range(len(PREDICT['PREVAL'])))),
 				r'(?P<SQL>\d?),(?P<MUT>\d?),(?P<BAT>\d?),(?P<RSV1>\d?),(?P<RSV2>\d?),(?P<WAT>\w{,4}),(?P<SIG_LVL>\d?),(?P<BK_COLOR>\w*),(?P<BK_DIMMER>\d)$')),
 			'repost': stspost,	# Post processing routine
@@ -330,101 +330,101 @@ class Decode:
 	def domatch(tomatch):
 
 		global prematchre, ERRORRESP
-	
+
 		def doIt(target, request, basedict, addgroups):
 
 			regex = re.compile(request, flags = 0)
 			rematch = regex.match(target)
-			
+
 			if rematch is not None:
 				basedict.update(rematch.groupdict(default=''))
 				if addgroups:
 					basedict.update({'groups': rematch.groups(default='')})
 			else:
 				 basedict.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_NOMATCH})
-	
+
 		def runIt(target, request, basedict, addgroups = False):
 			nonlocal doIt
-		
+
 			if isinstance(request, types.FunctionType):
 				doIt(target, request(basedict), basedict, addgroups)
-		
+
 			elif isinstance(request, str):
 				doIt(target, request, basedict, addgroups)
-		
+
 			else:
 				raise ValueError("Invalid decode type")
-	
+
 		dec = Decode()
-	
+
 		matchresult = {	# Set some default results
-			'CMD': '', 
-			'iserror': False, 
+			'CMD': '',
+			'iserror': False,
 			'isOK': False,
 			'errorcode': Decode.NO_ERROR,
 			'response': tomatch,
 		}
 
 		prematch = prematchre.match(tomatch)
-		if prematch is None: 
+		if prematch is None:
 			Scanner.logger.error('Prematch failed for: %s', tomatch)
 			matchresult.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_PREMATCH})
-		
+
 		else:	# Prematch OK, try the main event
 			# Update the results
 			matchresult.update(prematch.groupdict())
-	
+
 			resp = prematch.group(1)	# What did we find?
 			Scanner.logger.debug('Prematch found: %s', str(resp))
-	
+
 			if resp in ERRORRESP:		# Error response, can't go further
 				Scanner.logger.error('Scanner error response: "%s"', tomatch)
 				matchresult.update({'CMD': resp, Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_RESPONSE})
-		
+
 			elif resp in dec.Decodes:
 				matchresult['CMD'] = resp
 				# OK, we know what to do ... I hope
-		
+
 				# First, run the prematch if it exists
 				if 'repre' in dec.Decodes[resp]:
 					runIt(tomatch, dec.Decodes[resp]['repre'], matchresult)
-			
+
 				# So far, so good. Now run the main event
 				if 'recmd' in dec.Decodes[resp]:	# Should usually be there
 					runIt(tomatch, dec.Decodes[resp]['recmd'], matchresult, addgroups = True)
 					if matchresult.get('groups', [''])[0] == 'OK' \
-						and len(matchresult['groups']) == 1: 
+						and len(matchresult['groups']) == 1:
 						matchresult['isOK'] = True
-				
+
 				if 'repost' in dec.Decodes[resp]:	# Post processing
 					dec.Decodes[resp]['repost'](matchresult)
-		
+
 			else:
 				Scanner.logger.error('Scanner unknown response: %s', tomatch)
 				matchresult.update({Decode.ISERRORKEY: True, Decode.ERRORCODEKEY: Decode.ERR_UNKNOWN_RESPONSE})
-		
+
 		return matchresult
 
 class Scanner(Serial):
 	"""
 	Scanner class - Handles opening IO to the scanner and command write with response read.
 	"""
-	
+
 	COOKED = 0
 	RAW = 1
 	DECODED = 2
-	
+
 	COMRATES = (4800, 9600, 19200, 38400, 57600, 115200) # Possible COM port speeds
-	
-	ServiceModes = dict((('air', '6'), ('cb', '7'), ('fm', '11'), ('frs', '8'), 
-		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'), 
+
+	ServiceModes = dict((('air', '6'), ('cb', '7'), ('fm', '11'), ('frs', '8'),
+		('ham', '3'), ('marine', '4'), ('military', '15'), ('news', '2'),
 		('publicsafety', '1'), ('racing', '9'), ('railroad', '5'), ('special', '12')))
 
 	def __init__(self, port = None, baudrate = 0, timeout = 0.25, logname = __name__, loglevel = logging.WARNING):
 		'''
 		Initialize the underlying serial port and provide the wrapper
 		'''
-		
+
 		Serial.__init__(self, port = port, baudrate = baudrate, timeout = timeout)
 
 		self.MDL = '?'
@@ -434,7 +434,7 @@ class Scanner(Serial):
 
 		if port is not None:
 			self.logopen()
-	
+
 		self._sio_lock = threading.RLock()
 
 	def logopen(self):
@@ -448,14 +448,14 @@ class Scanner(Serial):
 		else:
 			Scanner.logger.warning('Scanner (port: %s, baudrate: %d) should be open but is not',
 				self.port, self.baudrate)
-		
+
 	def discover(self):
 		'''
 		Discover the Scanner port
-		
+
 		Currently only the PL2303 is acceptable. This will expand later in development
 		'''
-		
+
 		if self.port is None:	# Look for the port
 			devs_prefix = ['/dev/cu.PL2303*',] # Just PL2303 devices for now
 			pdevs = [glob(pref) for pref in devs_prefix]
@@ -464,19 +464,19 @@ class Scanner(Serial):
 				if len(pdev1) > 0:
 					self.port = pdev1[0]
 					break
-				
+
 		if self.port is None:	# Still bad ... not good
 			Scanner.logger.error('Unable to discover scanner using: %s', str(devs_prefix))
 			return False
 		else:
 			Scanner.logger.info('Found device on: %s', self.port)
-		
+
 		self.baudrate = 115200
-		
+
 		self.open()
-		
+
 		self.logopen()
-		
+
 		return self.isOpen()
 
 	def _readresp(self):
@@ -486,10 +486,10 @@ class Scanner(Serial):
 
 		def timeout():
 			nonlocal gotline
-			
+
 			self.logger.warning('Readresp Timeout, got "%s" so far', str(b))
 			gotline = True
-			
+
 		to = threading.Timer(2, timeout)
 		to.start()
 
@@ -501,39 +501,39 @@ class Scanner(Serial):
 				b += c
 				if c[-1] == 13:		# ord(b'\r') == 13
 					gotline = True
-		
+
 		to.cancel()
 		return b
-		
+
 	def cmd(self, cmd_string, cooked = COOKED):
 		'''
 		Send a command and return the response
-		
+
 		The line ending '\r' is automatically added and removed
 		'''
 		with self._sio_lock:	# Ensure we don't do two write/reads at the same time
 			self.write((cmd_string + '\r').encode('ISO-8859-1'))
 			self.flush()
-		
+
 			rawresp = self._readresp()
 			if len(rawresp) == 0:	# Hmmm, we should never get a NULL response ... try once more
 				Scanner.logger.warning('Scanner returned null response, retrying')
 				rawresp = self._readresp()
 				Scanner.logger.warning('Received: "%s"', str(rawresp))
-		
+
 			if rawresp.endswith(b'\r'): rawresp = rawresp[:-1] # Strip the '\r'
-		
+
 			# If it's not RAW, we cook it
 			if cooked != Scanner.RAW: resp = self.cookIt(rawresp)
 			else: resp = rawresp
-		
+
 			# Would you like Decoded with that?
-			if cooked == Scanner.DECODED: 
+			if cooked == Scanner.DECODED:
 				resp = self.decodeIt(resp)
 				resp['rawresponse'] = rawresp
-		
+
 		return resp
-	
+
 	# Drain is only used when there may be a problem. It is supposed to resynchronize the streams
 	# This takes a while so don't use it lightly
 	def drain(self):
@@ -542,8 +542,8 @@ class Scanner(Serial):
 			self.flushOutput()		# Flush any output
 			self.flushInput()		# Flush any input too
 			return
-			
-		
+
+
 	def cookIt(self, resp):
 		'''
 		Create an ascii string from the bytes input
@@ -553,9 +553,9 @@ class Scanner(Serial):
 		if not isinstance(resp, bytes):
 			Scanner.logger.critical('CookIt(): I can only cook bytes!')
 			raise TypeError('Scanner.CookIt(): I can only cook bytes!')
-		
+
 		return bytes([c if c < 127 else ord('?') for c in resp]).decode('ASCII')
-		
+
 	def decodeIt(self, resp):
 		'''
 		Decode a cooked response into the corresponding structure
