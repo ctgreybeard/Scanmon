@@ -5,7 +5,93 @@ from tkinter import ttk
 
 import random, time
 
-class TableWin(tk.Toplevel):
+class HitDesc:
+	'''Hold pertinent information for each System/Group/Channel found.
+
+	'''
+	
+	def __init__(self, system, group, channel, freq, duration, logger = None):
+		'''Builds the basic "Hit" object.
+
+		Arguments:
+		system -- The System name from the scanner
+		group -- The Group name from the scanner
+		channel -- The Channel name from the scanner
+		freq -- The channel frequency or TGID from the scanner
+			Note: The frequency is used for conventional channels and the
+			TGID is used for trunked systems.
+		duration -- The current duration of the transmission
+
+		'''
+
+		self.logger = logger
+
+		self.system = system.strip()
+		self.group = group.strip()
+		self.channel = channel.strip()
+		self.freq = str(freq).strip()
+		self.count = 1
+		self.duration = duration
+		self.last = time.strftime('%m/%d/%Y %H:%M:%S')
+		self.key = self.genKey(self.system, self.group, self.channel, self.freq)
+		self.contentRow = None
+
+		if self.logger:
+			self.logger.debug('HitDesc.__init__: HitDesc (%s) created', self.key)
+
+	def bumpCount(self, dur):
+		'''Increase the internal counter by one and add the duration to the existing value
+
+		Arguments:
+		dur - The additional duration
+
+		'''
+		#print('Bump instance')
+		self.count += 1
+		self.last = time.strftime('%m/%d/%Y %H:%M:%S')
+		self.duration += dur
+		if self.contentRow is not None:
+			#print('Bump row')
+			self.contentRow.tvCnt.set(self.count)
+			self.contentRow.tvLst.set(self.last)
+			self.contentRow.tvDur.set(self.duration)
+
+		if self.logger:
+			self.logger.debug('HitDesc.bumpCount: HitDesc (%s) bumped: cnt=%s, dur = %s', 
+				self.key, self.count, self.duration)
+
+	def genKey(self, system, group, channel, freq):
+		'''Generate the unique key associated with the System/Group/Channel
+
+		To generate the key each component (System, Group, Channel) is set to lower case
+		and any whitespace prefix or suffix is removed. The triple is then separated
+		with colons (':') and returned as the key. The freq argument is  
+		silently ignored in the current implementation.
+
+		Within the scanner System, Group, and Channel names are usually in mixed case
+		and have trailing spaces to pad them to 16 characters.
+
+		'''
+
+		key = '{}:{}:{}'.format(system.lower().strip(), group.lower().strip(), channel.lower().strip())
+
+		if self.logger:
+			self.logger.debug('HitDesc.genKey: From %s, %s, %s, %s generated key=%s', system, group, channel, freq, key)
+
+		return key
+
+# END class HitDesc
+
+class LogWin(tk.Toplevel):
+
+	'''Build, display, and update the Log display window.
+
+	This class is used by the ScanMon package to display the "Hits Log" from the scanner.
+	Each System/Group/Channel combination is tracked separately showing the frequency,
+	number of transmissions (count), and the total duration of the receptions.
+
+	'''
+
 	WIDTHSYS = 16
 	WIDTHGRP = 16
 	WIDTHCHN = 16
@@ -13,40 +99,30 @@ class TableWin(tk.Toplevel):
 	WIDTHDUR = 4
 	WIDTHCNT = 4
 	WIDTHLST = 17
+	LABELPAD = 2
+	LABELBG = '#eef'
+	LABELBORDER = 1
+	LABELRELIEF = tk.RAISED
 	CONTENTPAD = 2
-
-	class HitDesc:
-		def __init__(self, system, group, channel, freq, duration):
-			self.system = system
-			self.group = group
-			self.channel = channel
-			self.freq = freq
-			self.count = 1
-			self.duration = duration
-			self.last = time.strftime('%m/%d/%Y %H:%M:%S')
-			self.key = TableWin.HitDesc.genKey(system, group, channel, freq)
-			self.contentRow = None
-
-		def bumpCount(self, dur):
-			#print('Bump instance')
-			self.count += 1
-			self.last = time.strftime('%m/%d/%Y %H:%M:%S')
-			self.duration += dur
-			if self.contentRow is not None:
-				#print('Bump row')
-				self.contentRow.tvCnt.set(self.count)
-				self.contentRow.tvLst.set(self.last)
-				self.contentRow.tvDur.set(self.duration)
-
-		def genKey(system, group, channel, freq):
-			return '{}:{}:{}'.format(system, group, channel)
+	CONTENTBG = '#ffe'
+	CONTENTBORDER = 1
+	CONTENTRELIEF = tk.RIDGE
+	DECORATIONPAD = 2
+	DECORATIONBG = '#eff'
+	DECORATIONBORDER = 2
+	DECORATIONRELIEF = tk.RAISED
 
 	class ContentRow(ttk.Frame):
-		def __init__(self, master, desc, **kw):
+		'''Build a ttk.Frame which holds the cells containing the values from the HitDesc
+
+		'''
+
+		def __init__(self, master, desc, logger = None, **kw):
+			'''Build the Frame (self) and fill it'''
+
 			ttk.Frame.__init__(self, master, **kw)
 
-			self.mstyle = ttk.Style()	# Master style instance for configuration
-			self.mstyle.configure('Data.TLabel', border = 1, relief = tk.RIDGE, padding = TableWin.CONTENTPAD)
+			self.logger = logger
 
 			self.tvSys = tk.StringVar()
 			self.tvSys.set(desc.system)
@@ -66,15 +142,32 @@ class TableWin(tk.Toplevel):
 			self.desc = desc
 			desc.contentRow = self
 
-			lSys = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvSys, width = TableWin.WIDTHSYS)
-			lGrp = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvGrp, width = TableWin.WIDTHGRP)
-			lChn = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvChn, width = TableWin.WIDTHCHN)
-			lFrq = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvFrq, width = TableWin.WIDTHFRQ)
-			lDur = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvDur, width = TableWin.WIDTHDUR,
+			if self.logger:
+				self.logger.debug('ContentRow.__init__: And another data row(%s) springs to life!', self.desc.key)
+
+			lSys = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvSys,
+				width = LogWin.WIDTHSYS)
+			lGrp = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvGrp,
+				width = LogWin.WIDTHGRP)
+			lChn = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvChn,
+				width = LogWin.WIDTHCHN)
+			lFrq = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvFrq,
+				width = LogWin.WIDTHFRQ)
+			lDur = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvDur,
+				width = LogWin.WIDTHDUR,
 				anchor = tk.E)
-			lCnt = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvCnt, width = TableWin.WIDTHCNT,
+			lCnt = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvCnt,
+				width = LogWin.WIDTHCNT,
 				anchor = tk.E)
-			lLst = ttk.Label(self, style = 'Data.TLabel', textvariable = self.tvLst, width = TableWin.WIDTHLST)
+			lLst = ttk.Label(self, style = 'Data.TLabel',
+				textvariable = self.tvLst,
+				width = LogWin.WIDTHLST)
 
 			lSys.grid(column = 0, row = 0, sticky = (tk.EW, tk.N))
 			lGrp.grid(column = 1, row = 0, sticky = (tk.EW, tk.N))
@@ -84,10 +177,33 @@ class TableWin(tk.Toplevel):
 			lCnt.grid(column = 5, row = 0, sticky = (tk.EW, tk.N))
 			lLst.grid(column = 6, row = 0, sticky = (tk.EW, tk.N))
 
-			#self.grid(column = 0, row = row, sticky = (tk.EW, tk.N))
+		def destroy(self):
+			'''Called to destroy the ContentRow when the window is closed
 
-	def __init__(self, masterptr, *args, **kw):
+			Ensures that the contained HitDesc is disconnected from this (soon to die)
+			ContentRow.
+
+			'''
+
+			if self.logger:
+				self.logger.debug('ContentRow.destroy: And another data row(%s) dies an inglorius death!', self.desc.key)
+
+			self.desc.contentRow = None
+			self.desc = None
+			ttk.Frame.destroy(self)
+
+	# END class ContentRow
+	
+	# BEGIN class LogWin
+
+	def __init__(self,  *args, logger = None, **kw):
+		'''Create and initialize the log display window'''
+		
 		tk.Toplevel.__init__(self, *args, **kw)
+		
+		self.logger = logger
+		if self.logger:
+			self.logger.debug('LogWin.__init__: Creating LogWin')
 
 		self.mstyle = ttk.Style()	# Master style instance for configuration
 
@@ -100,20 +216,50 @@ class TableWin(tk.Toplevel):
 		self.rowconfigure(1, weight = 1)
 		self.rowconfigure(2, weight = 0)
 
+		# The necessary widgets
 		ttk.Sizegrip(self).grid(column = 1, row = 2)
+		ttk.Button(self, 
+			text = 'Close', 
+			command =  self.doClose, 
+			style = 'LogWin.TButton').grid(
+				column = 0, 
+				row = 2, 
+				padx = LogWin.DECORATIONPAD, 
+				pady = LogWin.DECORATIONPAD)
 
-		self.mstyle.configure('Cframe.TFrame', border = 2)
-		self.mstyle.configure('Clabel.TLabel', border = 2, padding = TableWin.CONTENTPAD)
+		self.mstyle.configure('Cframe.TFrame',
+			border = 2)
+
+		self.mstyle.configure('Clabel.TLabel',
+			border = LogWin.LABELBORDER,
+			background = LogWin.LABELBG,
+			relief = LogWin.LABELRELIEF,
+			padding = LogWin.LABELPAD,
+			)
+
+		self.mstyle.configure('Data.TLabel',
+			border = LogWin.CONTENTBORDER,
+			background = LogWin.CONTENTBG,
+			relief = LogWin.CONTENTRELIEF,
+			padding = LogWin.CONTENTPAD,
+			)
+
+		self.mstyle.configure('LogWin.TButton',
+			border = LogWin.DECORATIONBORDER,
+			background = LogWin.DECORATIONBG,
+			relief = LogWin.DECORATIONRELIEF,
+			padding = LogWin.DECORATIONPAD,
+			)
 
 		labelRow = ttk.Frame(self, style = 'Cframe.TFrame')
 		labelRow.grid(column = 0, row = 0, sticky = tk.EW)
-		labelSys = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'System', width = TableWin.WIDTHSYS)
-		labelGrp = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Group', width = TableWin.WIDTHGRP)
-		labelChn = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Channel', width = TableWin.WIDTHCHN)
-		labelFrq = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Freq', width = TableWin.WIDTHFRQ)
-		labelDur = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Dur', width = TableWin.WIDTHDUR)
-		labelCnt = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Count', width = TableWin.WIDTHCNT)
-		labelLst = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Last', width = TableWin.WIDTHLST)
+		labelSys = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'System', width = LogWin.WIDTHSYS)
+		labelGrp = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Group', width = LogWin.WIDTHGRP)
+		labelChn = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Channel', width = LogWin.WIDTHCHN)
+		labelFrq = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Freq', width = LogWin.WIDTHFRQ)
+		labelDur = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Dur', width = LogWin.WIDTHDUR)
+		labelCnt = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Cnt', width = LogWin.WIDTHCNT)
+		labelLst = ttk.Label(labelRow, style = 'Clabel.TLabel', text = 'Last', width = LogWin.WIDTHLST)
 
 		labelSys.grid(column = 0, row = 0, sticky = (tk.EW))
 		labelGrp.grid(column = 1, row = 0, sticky = (tk.EW))
@@ -128,121 +274,168 @@ class TableWin(tk.Toplevel):
 
 		# Row data dictionary
 		self.rowData = {}
-		
-		# Pointer to the pointer back to me (confused?)
-		self.masterptr = masterptr
-
-	def destroy(self):
-		# Ouch! We are shutting down!
-		#print('Say goodnight Dick!')
-		# Tell the boss we don't exist any more
-		self.masterptr[0] = None
-		# Clear the ata row pointers in the data elements
-		for data in self.rowData.values():
-			data.desc.contentRow = None
-		# And, finally, commit seppuku!
-		tk.Toplevel.destroy(self)
 
 	def add(self, desc):
+		'''Request to add a Hit (desc) to the Log window
+		
+		If the Hit, as defined by its key, already is displayed in the window then
+		a 'bump' is performed which updates the hit count and total duration.
+		
+		Otherwise a new ContentRow is created and added to the content Frame and the entire
+		set of hits is sorted and displayed in key order.
+		
+		'''
+		
+		if self.logger:
+			self.logger.debug('LogWin.add: Adding %s', desc.key)
+
 		if desc.key in self.rowData:	# We already have one of these ...
+			if self.logger:
+				self.logger.debug('LogWin.add: Exists, bumping')
 			thisrow = self.rowData[desc.key]
 			thisrow.desc.bumpCount(desc.duration)
 
 		else:	# Make a new one ...
-			thisrow = TableWin.ContentRow(self.contentFrame, desc)
+			if self.logger:
+				self.logger.debug('LogWin.add: New, creating row for it')
+			thisrow = LogWin.ContentRow(self.contentFrame, desc, logger = self.logger)
 			self.rowData[thisrow.key] = thisrow
 
 			# Rearrange the rows by sorted key
-			sortedkeys = list(self.rowData.keys())
-			sortedkeys.sort()
+			sortedkeys = sorted(self.rowData.keys())
+
 			row = 0
 			for r in sortedkeys:
-				#print('Key={} in row {}'.format(r, row))
+				if self.logger:
+					self.logger.debug('LogWin.add: Sort key=%s in row %s', r, row)
 				self.rowData[r].grid(column = 0, row = row, sticky = (tk.EW, tk.N))
 				row += 1
 
 		return thisrow.desc
 
-class MainWin(ttk.Frame):
-	def __init__(self, *args, **kw):
-		ttk.Frame.__init__(self, *args, **kw)
+	def doClose(self):
+		'''Close the Log display window'''
+		
+		if self.logger:
+			self.logger.debug('LogWin.doClose: Closing down ...')
+		self.winfo_toplevel().destroy()		# Say goodnight Dick!
 
-		self.mstyle = ttk.Style()	# Master style instance for configuration
-
-		self.master.columnconfigure(0, weight = 1)
-		self.master.rowconfigure(0, weight = 1)
-
-		self.columnconfigure(0, weight = 1)
-		self.columnconfigure(1, weight = 1)
-		self.columnconfigure(2, weight = 1)
-		self.rowconfigure(0, weight = 1)
-		self.grid(column = 0, row = 0, sticky = (tk.N, tk.S, tk.E, tk.W))
-
-		self.grid_propagate(False)
-
-		# Build buttons
-
-		goButton = ttk.Button(self, text = 'Go', width = 8, command = self.doGo)
-		goButton.grid(column = 0, row = 0, padx = 5, pady = 5)
-		addButton = ttk.Button(self, text = 'Add', width = 8, command = self.doAdd)
-		addButton.grid(column = 1, row = 0, padx = 5, pady = 5)
-		stopButton = ttk.Button(self, text = 'Stop', width = 8, command = self.doStop)
-		stopButton.grid(column = 2, row = 0, padx = 5, pady = 5)
-
-		self.dataDescs = {}
-		self.tableWin = [None]
-
-	def doGo(self):
-		if self.tableWin[0] is None or not self.tableWin[0].winfo_exists():
-			self.tableWin[0] = TableWin(masterptr = self.tableWin)
-			for ndesc in list(self.dataDescs.values()):
-				self.dataDescs[ndesc.key] = self.tableWin[0].add(ndesc)
-		else:	# Print info about the window. Is it still active?
-			pass
-			#print('tableWin exists {}'.format(self.tableWin[0].winfo_exists()))
-
-	def doAdd(self):
-		def rchar():
-			return chr(ord('a') + random.randint(0, 25))
-
-		if random.randint(0, 3) == 0:
-			system = 'ssystem'
-			group = 'ggroup'
-			chan = 'cchan'
-			freq = 'ffreq'
-			dur = random.randint(1,15)
-			#print('Gen dup, dur=', dur)
-		else:
-			system = rchar() + 'system'
-			group = rchar() + 'group'
-			chan = rchar() + 'chan'
-			freq = rchar() + 'freq'
-			dur = random.randint(1,15)
-			#print('Gen new')
-
-		ndesc = TableWin.HitDesc(system, group, chan, freq, dur)
-		ndesckey = ndesc.key
-		if self.tableWin[0] is None:	# Keep our own internal list
-			if ndesckey in self.dataDescs:	# We have one of these
-				action = 'Bump'
-				self.dataDescs[ndesc.key].bumpCount(dur)
-			else:
-				action = 'Insert'
-				self.dataDescs[ndesckey] = ndesc
-		else:
-			action = 'Add'
-			self.dataDescs[ndesckey] = self.tableWin[0].add(ndesc)
-
-		#print('{} {}, count={}, dur={}, last={}'.format(
-		#	action, 
-		#	ndesckey, 
-		#	self.dataDescs[ndesckey].count, 
-		#	self.dataDescs[ndesckey].duration, 
-		#	self.dataDescs[ndesckey].last))
-
-	def doStop(self):
-		self.quit()
+# END class LogWin
 
 if __name__ == '__main__':
+	import logging
+	
+	class MainWin(ttk.Frame):
+		'''Test bench for LogWin
+		
+		This also demonstrates how to check for the window display which can be closed
+		independently from the application either via the Close button or the "application
+		close button" (upper left). This is shown in doGo and doAdd.
+		
+		'''
+	
+		def __init__(self, *args, **kw):
+			'''Create the test bench main window with three buttons: Go, Add, and Stop'''
+			
+			ttk.Frame.__init__(self, *args, **kw)
+
+			self.mstyle = ttk.Style()	# Master style instance for configuration
+
+			self.master.columnconfigure(0, weight = 1)
+			self.master.rowconfigure(0, weight = 1)
+
+			self.columnconfigure(0, weight = 1)
+			self.columnconfigure(1, weight = 1)
+			self.columnconfigure(2, weight = 1)
+			self.rowconfigure(0, weight = 1)
+			self.grid(column = 0, row = 0, sticky = (tk.N, tk.S, tk.E, tk.W))
+
+			self.grid_propagate(False)
+
+			# Build buttons
+
+			goButton = ttk.Button(self, text = 'Go', width = 8, command = self.doGo)
+			goButton.grid(column = 0, row = 0, padx = 5, pady = 5)
+			addButton = ttk.Button(self, text = 'Add', width = 8, command = self.doAdd)
+			addButton.grid(column = 1, row = 0, padx = 5, pady = 5)
+			stopButton = ttk.Button(self, text = 'Stop', width = 8, command = self.doStop)
+			stopButton.grid(column = 2, row = 0, padx = 5, pady = 5)
+
+			self.dataDescs = {}
+			self.logWin = None
+			
+			# Set up logging at the DEBUG level
+			self.logger = logging.getLogger('TestLog')
+			self.logger.setLevel('DEBUG')
+			sh = logging.StreamHandler()
+			sh.setLevel('DEBUG')
+			self.logger.addHandler(sh)
+			self.logger.debug('MainWin.__init__: Test for LogWin starting')
+
+		def doGo(self):
+			'''Create the LogWin if it's not already up'''
+			
+			if self.logWin is None or not self.logWin.winfo_exists():
+				self.logger.debug('MainWin.doGo: New LogWin')
+				self.logWin = LogWin(logger = self.logger)
+				for ndesc in list(self.dataDescs.values()):
+					self.dataDescs[ndesc.key] = self.logWin.add(ndesc)
+				self.lift(aboveThis = self.logWin)
+			else:	# Print info about the window. Is it still active?
+				pass
+				self.logger.debug('MainWin.doGo: LogWin exists {}'.format(self.logWin.winfo_exists()))
+
+		def doAdd(self):
+			'''Create a test "Hit" with semi-random data. Make an occasional duplicate'''
+			
+			def rchar():
+				'''A random capital letter'''
+				
+				return chr(ord('A') + random.randint(0, 25))
+
+			if random.randint(0, 3) == 0:
+				system = 'S System        '
+				group =  'G Group         '
+				chan =   'C Chan          '
+				freq =   '123.456         '
+				dur = random.randint(1,15)
+				self.logger.debug('MainWin.doAdd: Gen DUP(%s,%s,%s,%s), dur=%s', 
+					system, group, chan, freq, dur)
+			else:
+				system = rchar() + ' System        '
+				group = rchar()  + ' Group         '
+				chan = rchar()   + ' Chan          '
+				freq = str(random.randint(101, 199)).strip() + '.' + str(random.randint(1, 99)).strip()
+				dur = random.randint(1,15)
+				self.logger.debug('MainWin.doAdd: Gen NEW(%s,%s,%s,%s), dur=%s', 
+					system, group, chan, freq, dur)
+
+			ndesc = HitDesc(system, group, chan, freq, dur, logger = self.logger)
+			ndesckey = ndesc.key
+			self.logger.debug('MainWin.doAdd: Create HitDesc({})'.format(ndesckey))
+			if self.logWin is None or not self.logWin.winfo_exists():	# Keep our own internal list
+				if ndesckey in self.dataDescs:	# We have one of these
+					action = 'Bump'
+					self.dataDescs[ndesckey].bumpCount(dur)
+				else:
+					action = 'Insert'
+					self.dataDescs[ndesckey] = ndesc
+			else:
+				action = 'Add'
+				self.dataDescs[ndesckey] = self.logWin.add(ndesc)
+
+			self.logger.debug('MainWin.doAdd: {} {}, count={}, dur={}, last={}'.format(
+				action,
+				ndesckey,
+				self.dataDescs[ndesckey].count,
+				self.dataDescs[ndesckey].duration,
+				self.dataDescs[ndesckey].last))
+
+		def doStop(self):
+			'''Shut down, I guess we're done ...'''
+			
+			self.logger.debug('MainWin.doStop: Commanded to Stop!')
+			self.quit()
+
 	w = MainWin(width = 300, height = 200)
 	w.mainloop()
