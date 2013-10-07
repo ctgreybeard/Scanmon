@@ -10,7 +10,7 @@ class HitDesc:
 
 	'''
 
-	def __init__(self, system, group, channel, freq, duration, logger = None):
+	def __init__(self, system, group, channel, freq = 0, duration = 0, logger = None):
 		'''Builds the basic "Hit" object.
 
 		Arguments:
@@ -38,6 +38,56 @@ class HitDesc:
 
 		if self.logger:
 			self.logger.debug('HitDesc.__init__: HitDesc (%s) created', self.key)
+
+	def __lt__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key < other else False
+
+	def __le__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key <= other else False
+
+	def __eq__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key == other else False
+
+	def __ne__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key != other else False
+
+	def __gt__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key > other else False
+
+	def __ge__(self, other):
+		if isinstance(other, HitDesc):
+			other = other.key
+		elif not isinstance(other, str):
+			return NotImplemented
+		return True if self.key >= other else False
+	
+	def __str__(self):
+		return 'Sys={}, Grp={}, Chn={}, Freq={}'.format(
+			self.system, self.group, self.channel, self.freq)
+	
+	def __repr__(self):
+		return '<{}(system={}, group={}, channel={}, freq={}, duration={}>'.format(
+			self.__class__, self.system, self.group, self.channel, self.freq, self.duration)
 
 	def bumpCount(self, dur):
 		'''Increase the internal counter by one and add the duration to the existing value
@@ -310,7 +360,6 @@ class LogWin(tk.Toplevel):
 		utilFrame = ttk.Frame(self, style = 'utilFrame.TFrame')
 		utilFrame.grid(column = 0, row = 2, sticky = tk.EW)
 		utilFrame.columnconfigure(0, weight = 1)
-		utilFrame.columnconfigure(1, weight = 1)
 
 		ttk.Button(utilFrame,
 			text = 'Close',
@@ -320,42 +369,6 @@ class LogWin(tk.Toplevel):
 				row = 0,
 				padx = LogWin.DECORATIONPAD,
 				pady = LogWin.DECORATIONPAD)
-
-		rbFrame = ttk.Frame(utilFrame, style = 'utilFrame.TFrame')
-		rbFrame.grid(column = 1, row = 0, sticky = tk.EW)
-		rbFrame.columnconfigure(0, weight = 1)
-		rbFrame.columnconfigure(1, weight = 1)
-		self.tv_mode = tk.StringVar()
-		self.tv_mode.set(LogWin.DEFAULTMODE)
-		ttk.Radiobutton(rbFrame,
-			style = 'LogWin.TRadiobutton',
-			text = LogWin.SUMMARYMODE,
-			value = LogWin.SUMMARYMODE,
-			variable = self.tv_mode,
-			command = self.logMode,
-			width = 8,
-			).grid(
-				column = 0,
-				row = 0,
-				padx = LogWin.UTILITYPAD,
-				pady = LogWin.UTILITYPAD,
-				sticky = tk.E,
-				)
-
-		ttk.Radiobutton(rbFrame,
-			style = 'LogWin.TRadiobutton',
-			text = LogWin.DETAILMODE,
-			value = LogWin.DETAILMODE,
-			variable = self.tv_mode,
-			command = self.logMode,
-			width = 8,
-			).grid(
-				column = 1,
-				row = 0,
-				padx = LogWin.UTILITYPAD,
-				pady = LogWin.UTILITYPAD,
-				sticky = tk.W,
-				)
 
 		self.mstyle.configure('Cframe.TFrame',
 			border = 2)
@@ -399,15 +412,19 @@ class LogWin(tk.Toplevel):
 			relief = tk.SUNKEN,
 			padding = LogWin.DECORATIONPAD,
 			)
+			
+		self.notebookFrame = ttk.Notebook(self, style = 'LogWin.TNotebook')
+		self.notebookFrame.grid(column = 0, row = 0, sticky = (tk.NS, tk.EW))
+		self.tabs = []
 
 		# Build the summary info Frame
-		self.summaryFrame = ttk.Frame(self, style = 'SummaryFrame.TFrame')
-		self.summaryFrame.grid(column = 0, row = 0, sticky = (tk.NS, tk.EW))
+		self.summaryFrame = ttk.Frame(self.notebookFrame, style = 'SummaryFrame.ContentFrame.TFrame')
+		self.notebookFrame.add(self.summaryFrame, text = LogWin.SUMMARYMODE)
+		self.tabs.append(LogWin.SUMMARYMODE)
+		self.logger.debug('Summary frame added. There are %s tabs', self.notebookFrame.index('end'))
+
 		self.summaryFrame.rowconfigure(0, weight = 0)
 		self.summaryFrame.rowconfigure(1, weight = 1)
-
-		# The first thing we do is remove it ... refresh will bring it back
-		self.summaryFrame.grid_remove()
 
 		summaryLabelRow = ttk.Frame(self.summaryFrame, style = 'Cframe.TFrame')
 		summaryLabelRow.grid(column = 0, row = 0, sticky = tk.EW)
@@ -438,13 +455,13 @@ class LogWin(tk.Toplevel):
 		self.summaryContentFrame.grid(column = 0, row = 1, sticky = (tk.EW, tk.N))
 
 		# Build the detail info Frame
-		self.detailFrame = ttk.Frame(self, style = 'SummaryFrame.TFrame')
-		self.detailFrame.grid(column = 0, row = 0, sticky = (tk.NS, tk.EW))
+		self.detailFrame = ttk.Frame(self.notebookFrame, style = 'DetailFrame.ContentFrame.TFrame')
+		self.notebookFrame.add(self.detailFrame, text = LogWin.DETAILMODE)
+		self.tabs.append(LogWin.DETAILMODE)
+		self.logger.debug('Detail frame added. There are %s tabs', self.notebookFrame.index('end'))
+
 		self.detailFrame.rowconfigure(0, weight = 0)
 		self.detailFrame.rowconfigure(1, weight = 1)
-
-		# The first thing we do is remove it ... refresh will bring it back
-		self.detailFrame.grid_remove()
 
 		detailLabelRow = ttk.Frame(self.detailFrame, style = 'Cframe.TFrame')
 		detailLabelRow.grid(column = 0, row = 0, sticky = tk.EW)
@@ -470,28 +487,35 @@ class LogWin(tk.Toplevel):
 
 		self.detailContentFrame = ttk.Frame(self.detailFrame, style = 'Cframe.TFrame')
 		self.detailContentFrame.grid(column = 0, row = 1, sticky = (tk.EW, tk.N))
+		
+		self.notebookFrame.bind('<<NotebookTabChanged>>', self.tabChanged)
 
 		self.currentMode = ''	# No mode
 		self.refresh()			# Make a mode
+	
+	def tabChanged(self, event):
+		self.logger.debug('Notebook tab changed to %s', event.widget.index('current'))
+		self.refresh()
 
 	def refresh(self):
 		'''Request to refresh the current displayed window
 
 		'''
 
+		currtab = self.tabs[self.notebookFrame.index('current')]
 		if self.logger:
-			self.logger.debug('LogWin.refresh: Refreshing %s', self.tv_mode.get())
+			self.logger.debug('LogWin.refresh: Refreshing %s', currtab)
 
-		if self.tv_mode.get() == LogWin.SUMMARYMODE:
+		if currtab == LogWin.SUMMARYMODE:
 			self.summaryRefresh()
-		elif self.tv_mode.get() == LogWin.DETAILMODE:
+		elif currtab == LogWin.DETAILMODE:
 			self.detailRefresh()
 		else:
 			if self.logger:
-				self.logger.critical('Invalid refresh mode: %s', self.tv_mode)
+				self.logger.critical('Invalid refresh mode: %s', currtab)
 			self.doClose()
 
-		self.currentMode = self.tv_mode.get()
+		self.currentMode = currtab
 
 	def summaryRefresh(self):
 		'''Refresh to summary log window'''
@@ -499,9 +523,6 @@ class LogWin(tk.Toplevel):
 		if self.logger:
 			self.logger.debug('LogWin.summaryRefresh: Starting, summary contains %s items',
 				len(self.summaryArray))
-		if self.currentMode != LogWin.SUMMARYMODE:
-			self.detailFrame.grid_remove()
-			self.summaryFrame.grid()
 
 		# Scan through the summary array and display the entries
 		sortedkeys = sorted(self.summaryArray.keys())
@@ -539,10 +560,6 @@ class LogWin(tk.Toplevel):
 			self.logger.debug('LogWin.summaryRefresh: Starting, detail contains %s items',
 				len(self.detailArray))
 
-		if self.currentMode != LogWin.DETAILMODE:
-			self.summaryFrame.grid_remove()
-			self.detailFrame.grid()
-
 		# Scan through the detail array and display the entries
 		inserts = 0
 
@@ -569,14 +586,6 @@ class LogWin(tk.Toplevel):
 		if self.logger:
 			self.logger.debug('LogWin.doClose: Closing down ...')
 		self.winfo_toplevel().destroy()		# Say goodnight Dick!
-
-	def logMode(self):
-		'''Switch display modes between summary and detail'''
-
-		if self.logger:
-			self.logger.debug('LogWin.LogMode: Pressed: selected=%s', self.tv_mode.get())
-
-		self.refresh()
 
 # END class LogWin
 
@@ -673,7 +682,7 @@ if __name__ == '__main__':
 					system, group, chan, freq, dur)
 
 			ndesc = HitDesc(system, group, chan, freq, dur, logger = self.logger)
-			self.logger.debug('MainWin.doAdd: Create HitDesc({})'.format(ndesckey))
+			self.logger.debug('MainWin.doAdd: Create HitDesc({})'.format(ndesc.key))
 
 			####
 			# Note: The above code generates the test data. What follows should be emulated
