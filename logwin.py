@@ -88,6 +88,9 @@ class HitDesc:
 	def __repr__(self):
 		return '<{}(system={}, group={}, channel={}, freq={}, duration={}>'.format(
 			self.__class__, self.system, self.group, self.channel, self.freq, self.duration)
+			
+	def __hash__(self):
+		return hash(self.key)
 
 	def bumpCount(self, dur):
 		'''Increase the internal counter by one and add the duration to the existing value
