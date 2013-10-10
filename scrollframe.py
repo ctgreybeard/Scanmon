@@ -26,10 +26,12 @@ class ScrollFrame(ttk.Frame):
 		self._canvasframe.rowconfigure(0, weight = 1)
 		
 		self.labelFrame = ttk.Frame(self)
-		self.labelFrame.grid(column = 0, row = 0, sticky = tk.EW)
+		self.labelFrame.grid(column = 0, row = 0, sticky = tk.W)
+		self.labelFrame.bind('<Configure>', self._labelsddded)
 		
 		self.contentFrame = ttk.Frame(self._canvasframe)
-		self.contentFrame.bind('<Configure>', self._configure)
+		self.contentFrame.bind('<Configure>', self._contentadded)
+		self._contentframeheight = self.contentFrame.winfo_height()
 		
 		self._canvas = tk.Canvas(self._canvasframe)
 	
@@ -118,66 +120,67 @@ class ScrollFrame(ttk.Frame):
 				max = c.winfo_width()
 		return max
 
-	def _configure(self, event):	# Triggered by the contentframe changing size
+	def _contentadded(self, event):	# Triggered by the contentframe changing size
 		if self._logger:
-			self._logger.debug('%s._configure: new height=%s', self._myname, event.height)
+			self._logger.debug('%s._contentadded: new height=%s, old height=%s', 
+				self._myname, 
+				event.height,
+				self._contentframeheight)
+		if event.height != self._contentframeheight:
+			self._contentframeheight = self.contentFrame.winfo_height()
+			if self._yscrollincrement == -1:	# We haven't set width or scrollincrement yet
+				if self.contentFrame.winfo_children():		# We have at least one child
+					c = self.contentFrame.winfo_children()[0]
+					c.update_idletasks()
+					self._yscrollincrement = c.winfo_height()
+					self._width = self.contentFrame.winfo_width()
+					self._canvas.configure(
+						width = self._width,
+						yscrollincrement = self._yscrollincrement,
+						)
 		
-		if self._yscrollincrement == -1:	# We haven't set width or scrollincrement yet
-			if self.contentFrame.winfo_children():		# We have at least one child
-				c = self.contentFrame.winfo_children()[0]
-				c.update_idletasks()
-				self._yscrollincrement = c.winfo_height()
-				self._width = self.contentFrame.winfo_width()
-				self._canvas.configure(
-					width = self._width,
-					yscrollincrement = self._yscrollincrement,
-					)
-		
-		isScroll = self._canvas.canvasy(self._canvas.winfo_height()) >= \
-			int(self._canvas.cget('scrollregion').split()[3]) - 5	# 5 pixel fudge
+			isScroll = self._canvas.canvasy(self._canvas.winfo_height()) >= \
+				int(self._canvas.cget('scrollregion').split()[3]) - 5	# 5 pixel fudge
 	
-		self._canvas.configure(scrollregion = (0, 0, 0, 
-			int(self._canvas.bbox(self._contentid)[3])))
+			self._canvas.configure(scrollregion = (0, 0, 0, 
+				int(self._canvas.bbox(self._contentid)[3])))
 		
-		#self._deep_bind(self.contentFrame, self._bindscroll)
+			self.contentFrame.lift()	# Make it visible
 		
-		maxw = self._maxWidth(self.contentFrame)
-		if self._canvas.winfo_width() != maxw:
-			if self._logger:
-				self._logger.debug('%s._configure: new width=%s', self._myname, maxw)
-			self._canvas.configure(width = maxw)
-		else:
-			if self._logger:
-				self._logger.debug('%s._configure: width remains=%s', self._myname, self._canvas.winfo_width())
-	
-		if isScroll:
-			if self._logger:
-				self._logger.debug('%s._configure: Scrolling...', self._myname)
-			self._doscroll(tk.SCROLL, 2, tk.UNITS)
-		
-		if self._logger:
-			self._logger.debug('%s._configure: contentframe is now %s, scrollregion is %s',
-				self._myname,
-				self._canvas.bbox(self._contentid), 
-				self._canvas.cget('scrollregion'))
+			self._deep_bind(self._canvasframe, self._bindscroll)
 
-	def labelsAdded(self):
+			maxw = self._maxWidth(self.contentFrame)
+			if self._canvas.winfo_width() != maxw:
+				if self._logger:
+					self._logger.debug('%s._contentadded: new width=%s', self._myname, maxw)
+				self._canvas.configure(width = maxw)
+			else:
+				if self._logger:
+					self._logger.debug('%s._contentadded: width remains=%s', self._myname, self._canvas.winfo_width())
+	
+			if isScroll:
+				if self._logger:
+					self._logger.debug('%s._contentadded: Scrolling...', self._myname)
+				self._doscroll(tk.SCROLL, 2, tk.UNITS)
+		
+			if self._logger:
+				self._logger.debug('%s._contentadded: contentframe is now %s, scrollregion is %s',
+					self._myname,
+					self._canvas.bbox(self._contentid), 
+					self._canvas.cget('scrollregion'))
+
+	def _labelsddded(self, event):
 		if self._logger:
-			self._logger.debug('%s.labelsAdded:', self._myname)
+			self._logger.debug('%s._labelsadded: new height=%s, new width=%s', 
+				self._myname, 
+				event.height,
+				event.width)
 		
 		self.labelFrame.update_idletasks()
 		self._labelframewidth = self.labelFrame.winfo_width()
 		self._labelframeheight = self.labelFrame.winfo_height()
 		self._deep_bind(self.labelFrame, self._bindscroll)
 	
-	def contentAdded(self):
-		if self._logger:
-			self._logger.debug('%s.contentAdded:', self._myname)
-		
-		self.contentFrame.lift()	# Make it visible
-		
-		self._deep_bind(self._canvasframe, self._bindscroll)
-
 ###########################
 # What follows below will be part of the test routines
 ###########################
@@ -190,7 +193,7 @@ if __name__ == '__main__':
 			ttk.Frame.__init__(self, master)
 		
 			logger.debug('%s.contentrow.__init__:', __name__)
-			msg = 'Some Content {} '.format(num) * 3
+			msg = 'Added Content {} '.format(num)
 
 			lSys = ttk.Label(self, style = 'Data.TLabel',
 				text = str(num) + ' System',
@@ -226,7 +229,6 @@ if __name__ == '__main__':
 		logger.debug('%s.doGo:', __name__)
 		new1 = contentrow(contentframe, num)
 		new1.grid(column = 0, sticky = tk.EW)
-		scrollframe.contentAdded()
 		num += 1
 	
 	def doClose():
@@ -259,17 +261,24 @@ if __name__ == '__main__':
 
 	# Holds the "labels"
 	labelframe = scrollframe.labelFrame
-	labelframe.configure(border = 2, relief = tk.RAISED)
+	labelframe.configure(border = 2, style = 'CdetailFrame.TFrame')
 	
 	mstyle = ttk.Style()
+	mstyle.configure('CdetailFrame.TFrame',
+		border = 0,
+		relief = tk.FLAT,
+		)
+	
 	mstyle.configure('CdetailLabel.TLabel',
 		border = 1,
 		relief = tk.GROOVE,
+		padding = 2,
 		background = '#F1F5B3')
 	
 	mstyle.configure('Data.TLabel',
 		border = 1,
 		relief = tk.GROOVE,
+		padding = 2,
 		background = '#DFFACA')
 	
 	detailLabelSys = ttk.Label(labelframe,
@@ -291,8 +300,6 @@ if __name__ == '__main__':
 	detailLabelFrq.grid(column = 3, row = 0, sticky = (tk.EW))
 	detailLabelDur.grid(column = 4, row = 0, sticky = (tk.EW))
 	detailLabelStart.grid(column = 5, row = 0, sticky = (tk.EW))
-
-	scrollframe.labelsAdded()
 
 	contentframe = scrollframe.contentFrame
 	
