@@ -55,20 +55,33 @@ class ScrollFrame(ttk.Frame):
 				self.winfo_width(), 
 				self.winfo_height())
 
-	def _doscroll(self, scroll = None, amount = None, type = None):
+	def _doscroll(self, scroll = tk.SCROLL, amount = 0, type = tk.UNITS):
+		
+		if self._logger:
+			self._logger.debug('%s._doscroll: Scroll type=%s, amount=%s, type=%s',
+				self._myname, scroll, amount, type)
 
 		action = 'Ignored'	
 		if self._canvas.winfo_height() < self._canvas.bbox(self._contentid)[3]:
 			action = 'Scrolled'
-			self._canvas.yview(scroll, amount, type)
+			if scroll == tk.MOVETO:
+				self._canvas.yview(scroll, amount)	# No units in MOVETO
+			else:
+				self._canvas.yview(scroll, amount, type)
+			if not self._scrollbar.winfo_viewable():
+				if self._logger:
+					self._logger.debug('%s._doscroll: Re-grid scrollbar', self._myname)
+				self._scrollbar.grid()
+		else:
+			action = 'Ignored'	
+			if self._scrollbar.winfo_viewable():
+				if self._logger:
+					self._logger.debug('%s._doscroll: Remove scrollbar', self._myname)
+				self._scrollbar.grid_remove()
+
 
 		if self._logger:
-			self._logger.debug('%s._doscroll: Scroll type=%s, amount=%s, type=%s - %s',
-				self._myname,
-				scroll, 
-				amount, 
-				type, 
-				action)
+			self._logger.debug('%s._doscroll: Action=%s', self._myname, action)
 	
 	def _mousescroll(self, event):
 		if self._logger:
